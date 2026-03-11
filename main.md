@@ -1,27 +1,18 @@
-Fix the current test/lint issues only. Do not refactor unrelated code.
+Fix the current failing test only. Do not refactor unrelated code.
 
-Observed errors from `npm test`:
-- `src/classifiers/IntentExtractor.ts`
-  - line 117:72 `Unnecessary escape character: \/`
-  - line 246:90 `Unnecessary escape character: \/`
-  - line 342:27 `Unnecessary escape character: \/`
-  - line 343:36 `Unnecessary escape character: \/`
-- `src/validation/ValidationOrchestrator.ts`
-  - line 411:13 `Unnecessary escape character: \/`
+Observed failing test:
+- `ETL Copilot Extension Tests`
+- `IntentExtractor`
+- `extracts table name from prompt`
 
-Also clean up these warnings only if they are trivial and safe:
-- `src/chat/ETLChatParticipant.ts`
-  - `ETLIntent` defined but never used
-  - `compiledTransform` assigned but never used
-- `src/compilers/TransformationCompiler.ts`
-  - `intent` defined but never used
-- `src/deployment/DbfsPublisher.ts`
-  - `_result` assigned but never used
-- `src/resolvers/ArtifactMappingResolver.ts`
-  - `TemplateStrategy` defined but never used
+Observed assertion:
+- expected `intent.source?.table === 'customers' || intent.target?.table === 'customers'`
+- actual result did not extract `customers`
 
 Requirements:
-1. Make the smallest safe patch.
-2. Name the exact file, class, and function changed.
-3. Do not change architecture.
-4. After changes, tell me to run `npm test` again.
+1. Inspect the current implementation before changing anything.
+2. Patch the smallest safe code surface.
+3. Prefer fixing `IntentExtractor.extract()` unless the test is clearly wrong.
+4. Name the exact file, class, and function changed.
+5. Do not change architecture.
+6. After the fix, tell me to run `npm test` again.
