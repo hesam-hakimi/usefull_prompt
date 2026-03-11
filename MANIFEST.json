@@ -1,0 +1,52 @@
+[
+  {
+    "path": ".github/agents/developer.agent.md",
+    "size": 4780,
+    "sha256": "01032c61569df2def0d80360336ad2f7aa6ceec27b1198a331e93075a0c6eae3"
+  },
+  {
+    "path": ".github/copilot-instructions.md",
+    "size": 6158,
+    "sha256": "37ee7f76e5345a4c3e2348012cc31cb33950342436816fd680fb9d08a16a96b7"
+  },
+  {
+    "path": ".github/prompts/00-master-build.prompt.md",
+    "size": 1709,
+    "sha256": "2d077bf701f6f6da326507bda1ca8b0d9b1047aa8c12a1a8da2b0c863dd1ef1c"
+  },
+  {
+    "path": ".github/prompts/01-implement-tool-aware-agent.prompt.md",
+    "size": 1286,
+    "sha256": "c40f5fd934f6e776e387c0e7d8c43889a5fafb139e78d75c2063953110161c34"
+  },
+  {
+    "path": ".github/prompts/02-generate-artifacts.prompt.md",
+    "size": 1073,
+    "sha256": "67d0ae2370eb21c0b643ed9ed90074eb73b38a466969944a3cac606252036235"
+  },
+  {
+    "path": ".github/prompts/03-add-validation-and-dev-deploy.prompt.md",
+    "size": 1302,
+    "sha256": "f8042f45cb3d4f707d7f39abb366448f7761ec21860574ce0506a7ca7559fe66"
+  },
+  {
+    "path": ".github/prompts/04-fix-bug.prompt.md",
+    "size": 1399,
+    "sha256": "a793e772f7645c76b6558a8b7406c3408bcf4352f52f2ec82e09fd05d1c86f89"
+  },
+  {
+    "path": "docs/FUNCTION_CLASS_MAP.md",
+    "size": 890,
+    "sha256": "8db81de1a410a9b64a2141397ee2a0896e54b0a4a3608d80089ef742aa397c21"
+  },
+  {
+    "path": "docs/README.md",
+    "size": 941,
+    "sha256": "344a60fdf84258e3d3364e8d530697f47d608ad765ac182a72ccaf386880be42"
+  },
+  {
+    "path": "docs/TOOL_USAGE_MAP.md",
+    "size": 510,
+    "sha256": "842547d9304016b4526106d595c7e4708f21b755c7d557898fb223693c81baa9"
+  }
+]
