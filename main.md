@@ -1,19 +1,15 @@
-Fix the ETL generation flow so it matches the real framework behavior for environment config linkage.
+Fix the ETL create summary so reused environment config is reported correctly.
 
-Observed reality:
-- The generated job config does NOT reference the env config inside the file.
-- In the real framework, a separate table maps which job runs with which job config and which env config.
-- For now, MVP does NOT update that table.
-- The extension may reuse a shared env config like `env_config_dev.yaml`, but it should not imply that the job config contains the reference.
+Observed problem:
+- The summary still says `New file: conf/env/silver_to_synapse_env_config.yml`
+- In this workspace, the actual behavior is reuse of the shared env config such as `env_config_dev.yaml`
+- The summary should not claim a new env file was created when the shared env config is being reused
 
 Expected behavior:
-1. Do not expect or search for an env-config reference inside the generated job config.
-2. If a shared env config is reused, present it as external runtime metadata, not as an in-file linkage.
-3. The create flow summary should clearly say:
-   - generated job config path
-   - reused/shared env config name/path if applicable
-   - table registration is not yet implemented in MVP
-4. Do not generate a fake job-specific env-config reference inside the job config.
+1. If env config is reused, the summary must say it is reusing the shared env config
+2. Show the actual reused env config name/path, for example `env_conf/dev/env_config_dev.yaml`
+3. Do not show a fake generated env-config path when reuse is happening
+4. Keep the existing note that env linkage is external and table registration is not implemented in MVP
 
 Patch the smallest safe surface first.
 
@@ -21,11 +17,11 @@ Most likely areas:
 - `src/renderers/EnvConfigRenderer.ts`
 - `src/chat/ETLChatParticipant.ts`
 - `ETLChatParticipant.handleCreateJob()`
-- any result/summary model used after generation
-- any validation logic that assumes the job config must point to env config
+- `src/writers/RepoWriter.ts`
+- any summary/result model that decides whether env config is `new` vs `reused`
 
 Requirements:
 - preserve current architecture
-- do not implement SQL table registration yet
+- do not implement SQL table registration
 - name the exact file, class, and function changed
-- after the fix, tell me what to retest
+- after the fix, tell me to retest `@etl /create ...`
