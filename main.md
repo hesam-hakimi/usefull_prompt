@@ -1,27 +1,28 @@
-Fix the ETL artifact generator so generated jobs use referenced include files instead of putting everything inline in one job config.
+You are in the main workspace that contains:
+- `etl_framework_extension` (the extension source code to modify)
+- `etl-framework-adb` (the reference framework repo to read from)
+
+Fix the generator in `etl_framework_extension` so generated ETL jobs use referenced include files instead of keeping everything inline.
 
 Observed behavior:
-- The generated job config at `job_conf/silver/customer_orders_curated.json` keeps SQL and module details inline.
-- In the real ETL framework, job configs should reference separate include files where appropriate.
+- The generated file `job_conf/silver/customer_orders_curated.json` is inline.
+- Real jobs in `etl-framework-adb` use include-based structure.
 
 Expected behavior:
-1. The top-level job config should stay small and reference separate include files.
-2. SQL or module-specific sections should be moved into referenced include files using the real framework style.
-3. The generated output should follow patterns from real jobs in `etl-framework-adb`.
-4. Local write should create both:
+1. Top-level job config stays small.
+2. SQL/module sections move into separate referenced include files.
+3. Local write creates:
    - the top-level job config
-   - the referenced include files
+   - the include files it references
+4. Follow the real framework pattern from `etl-framework-adb`.
 
-Patch the smallest safe surface first.
-
-Most likely areas:
+Search only in `etl_framework_extension/src` for the implementation code.
+Most likely files:
 - `src/renderers/JobConfigRenderer.ts`
 - `src/renderers/IncludeFileRenderer.ts`
 - `src/builders/BlueprintBuilder.ts`
-- any template or artifact assembly logic that decides inline vs include output
 
 Requirements:
-- preserve current architecture
-- use the real framework repo in this workspace as the source of truth
-- name the exact file, class, and function changed
+- preserve architecture
+- name exact file, class, and function changed
 - after the fix, tell me to run F5 and retest the same `@etl /create ...` request
