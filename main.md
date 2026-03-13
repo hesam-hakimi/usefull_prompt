@@ -1,26 +1,28 @@
-The create summary is still wrong.
+The retest still failed.
 
-Observed behavior after retest:
-- It still shows `New file: conf/env/silver_to_synapse_env_config.yml`
-- It should show reuse of the shared env config instead
-- It already shows the external-linkage note correctly
+Observed behavior after F5 retest:
+- The create summary still shows `New file: conf/env/silver_to_synapse_env_config.yml`
+- It does not show reuse of the existing shared env config
+- The external-linkage note is correct, but the env-config summary line is still wrong
 
-Expected behavior:
-- If a shared env config already exists, the create summary must say it is reusing that env config
-- It must show the real reused env config path/name
-- It must not show a generated env-config file path when reuse is happening
+This means the previous fix did not change the actual summary output path.
 
-Please inspect where the create summary is assembled and patch the smallest safe surface.
+Please debug the actual summary rendering end-to-end and patch the smallest safe surface.
 
-Most likely areas:
+Required debugging steps:
+1. Trace the exact value returned by `EnvConfigRenderer.renderOrReuse()`
+2. Trace what `ETLChatParticipant.handleCreateJob()` stores in the rendered artifact result
+3. Trace what `RepoWriter.previewArtifacts()` or the final summary renderer actually prints for env config
+4. Find where `New file:` is chosen instead of `Reusing existing:`
+
+Most likely files:
+- `src/renderers/EnvConfigRenderer.ts`
 - `src/chat/ETLChatParticipant.ts`
-- `ETLChatParticipant.handleCreateJob()`
 - `src/writers/RepoWriter.ts`
-- `RepoWriter.previewArtifacts()`
-- any rendered-artifact result model passed from `EnvConfigRenderer` into the summary
 
 Requirements:
-1. Preserve the current architecture.
-2. Do not implement SQL registration.
-3. Name the exact file, class, and function changed.
-4. After the fix, tell me to run F5 and retest `@etl /create ...` again.
+- preserve architecture
+- do not implement SQL registration
+- name the exact file, class, and function changed
+- after the fix, tell me to run F5 and retest the same `@etl /create ...` request again
+- do not stop at theory; patch the code path that actually produces the wrong summary text
