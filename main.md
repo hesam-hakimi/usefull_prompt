@@ -1,28 +1,33 @@
-You are in the main workspace that contains:
-- `etl_framework_extension` (the extension source code to modify)
-- `etl-framework-adb` (the reference framework repo to read from)
-
-Fix the generator in `etl_framework_extension` so generated ETL jobs use referenced include files instead of keeping everything inline.
+The retest still failed.
 
 Observed behavior:
-- The generated file `job_conf/silver/customer_orders_curated.json` is inline.
-- Real jobs in `etl-framework-adb` use include-based structure.
+- After accepting the include-file fix and rerunning the extension, the generated job config is still inline.
+- The saved file still contains inline `sql` blocks instead of referenced include files.
+- So the previous fix did not change the actual create/write output path.
 
-Expected behavior:
-1. Top-level job config stays small.
-2. SQL/module sections move into separate referenced include files.
-3. Local write creates:
-   - the top-level job config
-   - the include files it references
-4. Follow the real framework pattern from `etl-framework-adb`.
+Please debug the real end-to-end generation path and patch the smallest safe surface.
 
-Search only in `etl_framework_extension/src` for the implementation code.
+Required debugging steps:
+1. Trace the exact code path used by `@etl /create`
+2. Trace how `handleCreateJob()` builds the blueprint
+3. Trace how the top-level job config content is actually assembled before local write
+4. Trace how include files are added to the artifact list
+5. Find why the saved output still contains inline `sql` instead of include references
+
 Most likely files:
+- `src/chat/ETLChatParticipant.ts`
+- `src/builders/BlueprintBuilder.ts`
 - `src/renderers/JobConfigRenderer.ts`
 - `src/renderers/IncludeFileRenderer.ts`
-- `src/builders/BlueprintBuilder.ts`
+- `src/writers/RepoWriter.ts`
+
+Expected behavior:
+- top-level job config uses include-style references
+- separate include files are created and written locally
+- saved job config must no longer inline the SQL blocks
 
 Requirements:
 - preserve architecture
-- name exact file, class, and function changed
-- after the fix, tell me to run F5 and retest the same `@etl /create ...` request
+- name the exact file, class, and function changed
+- after the fix, tell me to run F5 and retest the same `@etl /create ...` request again
+- do not stop at explanation; patch the code path that actually writes the inline file
