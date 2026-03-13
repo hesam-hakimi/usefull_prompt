@@ -1,28 +1,27 @@
-The retest still failed.
+Fix the ETL artifact generator so generated jobs use referenced include files instead of putting everything inline in one job config.
 
-Observed behavior after F5 retest:
-- The create summary still shows `New file: conf/env/silver_to_synapse_env_config.yml`
-- It does not show reuse of the existing shared env config
-- The external-linkage note is correct, but the env-config summary line is still wrong
+Observed behavior:
+- The generated job config at `job_conf/silver/customer_orders_curated.json` keeps SQL and module details inline.
+- In the real ETL framework, job configs should reference separate include files where appropriate.
 
-This means the previous fix did not change the actual summary output path.
+Expected behavior:
+1. The top-level job config should stay small and reference separate include files.
+2. SQL or module-specific sections should be moved into referenced include files using the real framework style.
+3. The generated output should follow patterns from real jobs in `etl-framework-adb`.
+4. Local write should create both:
+   - the top-level job config
+   - the referenced include files
 
-Please debug the actual summary rendering end-to-end and patch the smallest safe surface.
+Patch the smallest safe surface first.
 
-Required debugging steps:
-1. Trace the exact value returned by `EnvConfigRenderer.renderOrReuse()`
-2. Trace what `ETLChatParticipant.handleCreateJob()` stores in the rendered artifact result
-3. Trace what `RepoWriter.previewArtifacts()` or the final summary renderer actually prints for env config
-4. Find where `New file:` is chosen instead of `Reusing existing:`
-
-Most likely files:
-- `src/renderers/EnvConfigRenderer.ts`
-- `src/chat/ETLChatParticipant.ts`
-- `src/writers/RepoWriter.ts`
+Most likely areas:
+- `src/renderers/JobConfigRenderer.ts`
+- `src/renderers/IncludeFileRenderer.ts`
+- `src/builders/BlueprintBuilder.ts`
+- any template or artifact assembly logic that decides inline vs include output
 
 Requirements:
-- preserve architecture
-- do not implement SQL registration
+- preserve current architecture
+- use the real framework repo in this workspace as the source of truth
 - name the exact file, class, and function changed
-- after the fix, tell me to run F5 and retest the same `@etl /create ...` request again
-- do not stop at theory; patch the code path that actually produces the wrong summary text
+- after the fix, tell me to run F5 and retest the same `@etl /create ...` request
