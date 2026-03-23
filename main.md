@@ -1,127 +1,96 @@
-You need to fix a regression in the ETL VS Code extension create flow.
+You need to add strict pre-write validation to the ETL job generation flow.
 
-Current broken runtime behavior observed from manual test:
-1. User provides inline env config in the FIRST command:
-   ENV_CONFIG=env_conf/dev/env_config_dpv_dev.yaml
-   but the extension still creates a NEW env file instead of reusing it.
-2. User selects "Single Job Config" in the UI, but the extension still generates:
-   - customer_orders_curated_load.json
-   - job_onboarding_customer_orders_dev.json
-   instead of exactly one single job config.
-3. The extension is still implicitly using an existing template/reference pattern (for example Application_Metric_Load.json-like behavior) without explicitly asking the user which template to use.
-4. The extension does NOT tell the user which reference/template/job config it selected before generating.
-5. The final generated config still does not strictly follow the intended framework flow constraints.
+Goal:
+The extension must NEVER write invalid or incomplete generated files to disk. It must generate artifacts in memory, validate them, optionally repair once, re-validate, and only then write files.
 
-What must be implemented now
-A. Template selection must be explicit
-- Never silently use a reference job/template.
-- After env config is resolved, the system must discover candidate templates and present them to the user.
-- It must clearly show:
-  - candidate path
-  - why it matches
-  - whether it is recommended
-- Then it must ask the user to choose one of:
-  1. Use full structure from selected template
-  2. Use template as hints only
-  3. Do not use any template
-- If the user says no template, the system must build from scratch.
+Create TODOs first and keep them updated until everything is implemented and tested.
 
-B. Job shape selection must be enforced
-- After template decision, explicitly ask:
-  - Single Job Config
-  - Split Extract/Load
-- If user selects Single Job Config:
-  - generate exactly ONE job config file
-  - do NOT generate *_EXTRACT.json
-  - do NOT generate *_LOAD.json
-  - do NOT generate onboarding file unless user explicitly selected onboarding as optional artifact
-- If user selects Split Extract/Load:
-  - only then generate separate extract/load configs
+Implement a validation pipeline with these stages:
 
-C. Optional artifacts must be explicit
-- Ask user whether they want optional artifacts such as:
-  - onboarding
-  - success email
-  - validation query
-  - smoke test
-- If user does not select onboarding, do not create onboarding json.
+1. Artifact syntax validation
+- Parse every generated file based on extension/type:
+  - .json => strict JSON parse
+  - .yaml/.yml => YAML parse
+  - framework config/HOCON => parse using framework-compatible logic
+  - SQL includes => validate as SQL text artifact, not JSON/YAML
+- Fail if extension/content type mismatch is detected
 
-D. Inline ENV_CONFIG parsing must be authoritative
-- If first command includes:
-  ENV_CONFIG=...
-  then the extension must:
-  - parse it
-  - validate it exists
-  - validate it matches requested environment
-  - reuse it
-  - skip the env question entirely
-- It must NOT create a new env file in this case.
-- The selected/reused env config path must be carried all the way through final artifact generation.
+2. Artifact set / job-shape validation
+- If user selected single_job:
+  - exactly one job config file is allowed
+  - no EXTRACT/LOAD split files
+- If user selected split_extract_load:
+  - exactly expected split files must exist
+- Onboarding/success_email/validation_query/smoke_test must only be created if explicitly selected
+- Fail on unexpected extra artifacts
 
-E. The system must tell the user what reference/template is being used
-Before generating artifacts, show a structured summary like:
-- env config mode: reuse/create
-- env config path
-- selected template path OR "no template"
-- template mode: full_structure / hints_only / none
-- selected job shape: single_job / split_extract_load
-- selected optional artifacts
-Then wait for confirmation or continue based on the UI flow.
+3. Framework-aware validation
+Use etl-framework-adb as the source of truth.
+Validate:
+- required top-level properties
+- module order
+- allowed module types
+- include references exist
+- include file types are correct
+- env config variables resolve correctly
+- source/transform/write/synapse flow matches framework expectations
 
-F. Framework generation rules for Single Job Config
-For the user request:
-"Read data from bronze customer_orders, filter active records, derive order_status, write to silver table customer_orders_curated, then publish to Synapse table stage.customer_orders_curated in dev."
+4. Semantic validation
+Add hard-fail checks for:
+- TODO / TBD / FIXME placeholders
+- NULL AS <requested_derived_column> unless explicitly intended
+- empty SQL or nearly-empty SQL
+- unresolved required ${...} variables
+- suspicious mixed/duplicated source paths
+- transform referencing raw source path when framework expects sourced view
+- one-file-per-trivial-SQL-fragment over-splitting unless framework explicitly requires it
 
-If Single Job Config is selected, output must satisfy:
-1. exactly one job config file
-2. first module must be framework-compatible sourcing step, not a direct template load-only structure
-3. flow must represent:
-   - source read / temp view creation
-   - transformation consuming sourced view
-   - curated write
-   - synapse publish in the SAME job config
-4. must not create a separate load-only config when single-job was selected
+5. Repair pass
+If validation fails:
+- attempt one repair pass for fixable issues
+- then re-run all validation
+- if still failing, stop and do NOT write files
 
-G. State handling bug must be fixed
-Selections from prior steps are currently not honored at final generation.
-Fix session state so these values persist and are used by the final build path:
-- selectedTemplatePath
-- templateMode
-- jobShape
-- optionalArtifacts
-- envConfigMode
-- envConfigPath
+6. Write gate
+Files must only be written when validation succeeds.
+If validation fails, return a structured response with:
+- status
+- generated artifacts in memory
+- errors
+- warnings
+- repairAttempted
+- writeBlocked=true
 
-H. Add tests
-Create/update tests to prove:
-1. inline ENV_CONFIG skips env question and reuses existing file
-2. when Single Job Config is selected, exactly one job config is generated
-3. no *_EXTRACT.json or *_LOAD.json is created in single-job mode
-4. onboarding is not generated unless explicitly selected
-5. template is never auto-applied without explicit user selection
-6. selected template path is shown to the user before generation
-7. selected job shape is honored by final artifact generation
-8. selected env config path is honored by final artifact generation
+7. Logging
+Add detailed ETL Copilot output logging for:
+- generated artifacts before write
+- validation stages
+- each validator result
+- repair attempt
+- final write decision
 
-I. Debugging requirement
-Add temporary debug logging to the output channel for the exact final state used by generation:
-- envConfigPath
-- envConfigMode
-- selectedTemplatePath
-- templateMode
-- jobShape
-- optionalArtifacts
-- final artifact paths generated
+8. Tests
+Add tests for:
+- invalid JSON include blocked
+- YAML/JSON mismatch blocked
+- unresolved env variables blocked
+- placeholder SQL blocked
+- single_job shape rejects split artifacts
+- unexpected onboarding blocked
+- failed validation prevents write
+- successful validation allows write
+- repair pass re-validates before write
 
 Important:
-- Do not give me a high-level summary only.
-- Make concrete code changes.
-- Create TODOs first.
-- Then implement them one by one.
-- After implementation, run compile/tests.
-- Then provide:
-  1. files changed
-  2. exact functions changed
-  3. test results
-  4. manual retest steps
-  5. expected visible UI behavior after fix
+- Do not rely on sample outputs alone
+- Prefer etl-framework-adb behavior over observed generated artifacts
+- Do not silently write broken files
+- Do not silently downgrade validation failures to warnings
+
+At the end provide:
+- TODO checklist
+- files/classes/functions changed
+- compile result
+- test result
+- sample validation-failure output
+- sample successful write output
