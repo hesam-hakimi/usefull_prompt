@@ -1,65 +1,64 @@
-Good progress. Now I need runtime proof, not sample output.
+Good progress. This is now much closer to real proof.
 
-Create TODOs first and keep them updated until everything below is fully implemented and verified.
+Create TODOs first and keep them updated until every item below is fully completed.
 
-I do NOT want only “sample validation-failure output” or “sample successful write output”.
-I want real end-to-end evidence from the actual create flow.
+What is already proven:
+- invalid artifact detection
+- blocked write on validation failure
+- successful write on passing validation
+- compile + tests passing
+- repair pass is invoked and re-validated
 
-Do all of the following:
+What is still NOT sufficient and must now be fixed / verified:
 
-1. Run a real @etl /create scenario that intentionally produces invalid generated artifacts.
-Use a case that triggers at least one of these:
-- invalid JSON include
-- placeholder SQL / TODO / NULL AS derived column
-- wrong single_job vs split job shape
-- unresolved env variable
-- include file extension/content mismatch
+1. Repair pass quality
+The current repair pass is not acceptable because it turns SQL into an empty string.
+I need the repair logic to preserve valid SQL structure and only remove/fix the invalid fragment.
+Example: if SQL contains TODO comments or NULL placeholder logic, repair should either:
+- replace only the invalid fragment with a safe placeholder expression, or
+- fail without corrupting the rest of the SQL.
+Do not “repair” by blanking the SQL.
 
-2. Show the REAL runtime result from the extension:
-- exact request used
-- exact generated artifact paths
-- exact validation errors
-- proof that files were NOT written
-- proof that /write and /deploy are also blocked for the same invalid artifacts
+2. Real business scenario proof
+Run the actual customer_orders -> silver -> Synapse scenario, not only toy scenarios like orders_clean/customers_clean.
+Use the same type of request I’ve been testing:
+@etl /create Read data from bronze customer_orders, filter active records, derive order_status, write to silver table customer_orders_curated, then publish to Synapse table stage.customer_orders_curated in dev.
+Include ENV_CONFIG inline when needed.
 
-3. Run a second real @etl /create scenario that succeeds.
+3. Real output evidence for the real scenario
 Show:
-- exact request used
-- exact generated artifact paths
-- validation stages passed
-- proof that files were written only after validation success
+- exact request
+- selected template mode / template path / reason
+- selected job shape
+- actual generated artifact paths
+- validation result
+- whether write was blocked or allowed
+- final written files
 
-4. Prove the repair pass is real.
-For one failing case:
-- show original generated artifact content
-- show what the repair pass changed
-- show second validation result
-- if still failing, prove write remained blocked
+4. Manual Run Extension validation
+Do not stop at test-run proof.
+Validate the actual “Run Extension” / F5 flow and show:
+- prelaunch task output
+- extension host launch success
+- no npm:watch prelaunch failure
+- no stale launch/task mapping issues
 
-5. Add tests for real behavior, not just helper methods:
-- failed validation prevents RepoWriter.writeArtifacts from being called
-- failed validation prevents /write
-- failed validation prevents /deploy
-- successful validation allows write
-- repair pass re-validates before write
+5. Explicit deploy-path coverage
+Add or show proof that the same validation gate blocks /deploy on invalid artifacts, not just /write.
 
-6. Address the VS Code run/debug issue if still present:
-- fix npm:watch prelaunch task / launch configuration
-- show the exact tasks.json and launch.json changes if needed
-- confirm extension host launches cleanly
-
-7. Final response format:
+6. Final output format
+Return:
 - TODO checklist
 - files changed
-- real failing scenario output
-- real passing scenario output
-- proof of blocked write
-- proof of successful write
+- repair logic change summary
+- real customer_orders failing run (if intentionally made invalid)
+- real customer_orders passing run
+- manual F5 / Run Extension proof
 - compile result
 - test result
-- whether prelaunch/debug issue is fixed
 
 Important:
-Do not give me mock outputs or sample outputs.
-Do not stop at unit tests.
-I need actual runtime verification from the extension flow.
+- Do not use only synthetic/sample output
+- Do not use only toy scenarios
+- Do not claim repair succeeded if it only empties SQL
+- Keep the repair conservative and non-destructive
