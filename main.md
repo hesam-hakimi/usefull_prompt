@@ -58,4 +58,3 @@ Important rules:
 - Do not mark any item complete without verification evidence.
 - Focus on real extension behavior, not only unit tests.
 - If a bug appears, fix it and rerun the affected acceptance scenario before closing the task.
-
