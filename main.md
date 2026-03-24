@@ -1,48 +1,52 @@
-Create TODOs first and keep them updated until everything below is verified with real runtime evidence.
+Create TODOs first and keep them updated.
 
-We have implemented the include-resolution fix and context-aware validation pipeline. Now do the final end-to-end verification using the real customer_orders scenario.
+The include-resolution and validation-pipeline debugging track is now considered complete. Start the next phase: output-quality hardening for ETL artifact generation.
 
 Goal:
-Prove that the fix works in the actual create flow, not only in unit tests.
+Verify that generated ETL artifacts are not only valid, but also framework-faithful and production-usable.
 
-Required verification steps:
+Do the following:
 
-1. Run the real customer_orders create scenario end-to-end with:
-   - reused existing env config
-   - single job config mode
-   - no optional artifacts unless explicitly selected
+1. Define 5-8 golden end-to-end scenarios using real-style prompts:
+   - customer_orders single_job
+   - customer_orders split_extract_load
+   - reuse existing env config
+   - build from scratch
+   - template hints only
+   - full-structure template
+   - optional onboarding config
+   - optional validation/smoke artifact
 
-2. Capture runtime evidence for the full flow:
-   - template decision
-   - env config reuse decision
-   - include graph resolution
-   - merged/effective config build
-   - variable resolution
-   - validation result
-   - write result
+2. For each scenario, compare generated output against:
+   - etl-framework-adb patterns
+   - sample_repo examples
+   - expected framework conventions for:
+     - job naming
+     - module order
+     - include strategy
+     - variable naming
+     - source/target structure
+     - synapse publish structure
 
-3. Confirm these exact acceptance criteria:
-   - no new env config file is created when reuse mode is selected
-   - includes are resolved recursively before validation
-   - reused env config content is not incorrectly rejected because of HOCON syntax
-   - required properties are validated on effective root config only
-   - unresolved-variable errors for keys defined through included env/common configs are gone
-   - single_job creates exactly one top-level job config
-   - fragment/include files are not treated as standalone root configs
-   - write is allowed only when final validation passes
+3. Add automated regression tests that verify:
+   - output structure
+   - key property presence
+   - module ordering
+   - include path conventions
+   - template disclosure in chat response
+   - reuse-mode behavior
+   - split vs single-job behavior
 
-4. Show the exact files written for the passing scenario.
+4. If generated output uses placeholders, generic names, invalid SQL fragments, or weak framework conventions, fix the generator logic instead of only changing tests.
 
-5. Add or update regression tests if any missing runtime behavior is discovered.
-
-6. Provide a final report with:
-   - exact request used
-   - runtime output summary
-   - files written
-   - whether validation passed
-   - whether write was allowed
-   - whether any remaining gap still exists
+5. Produce a final report with:
+   - scenarios tested
+   - pass/fail per scenario
+   - gaps found
+   - fixes made
+   - remaining known limitations
 
 Important:
-Do not only summarize. Show concrete runtime evidence from the real scenario.
-If anything still fails, stop and fix it before closing the report.
+Do not stop at “validation passed”.
+This phase is about framework fidelity and output quality.
+Use TODO tracking and only mark items done when implemented and verified by tests.
