@@ -1,48 +1,59 @@
-You have completed the main ETL extension debugging phase. Now move to acceptance and release-hardening.
+We now have a real runtime failure with concrete evidence. I want you to debug and fix it using the exact runtime artifacts and logs, not assumptions.
 
-Create TODOs first and keep them updated.
+Create TODOs first and keep them updated until all items are completed.
 
-Objective:
-Run the next phase as a true acceptance phase for the ETL create flow, using the customer_orders scenario as the primary golden path.
+Goal:
+Fix the malformed YAML / config rendering issue in the real ETL create flow for the customer_orders scenario.
 
-Primary scenario:
-@etl /create Read data from bronze customer_orders, filter active records, derive order_status, write to silver table customer_orders_curated, then publish to Synapse table stage.customer_orders_curated in dev.
-1-source: abfss://bronze@edaaaedle1devsrz.dfs.core.windows.net/BRONZE/customer_order
-2-USE THIS filter FOR STATUS: order_status = 'completed'
-3-target folder ON ADLS: ${adls.curated.customer_order.root}/customer_orders_curated
-4-synapse: STAGING TABLE : STAGING.CUSTOMER_ORDER_STAGE_BASE-TABLE AND TABLE NAME IS ORDER.CUSTOMER_ORDER_BASE-TABLE standard stage and etl.usp_process_main_v2
-4-active flag: active_flag = 1
-ENV_CONFIG=env_conf/dev/env_config_dpv_dev.yaml
+What I observed in the real Extension Development Host run:
+1. The flow correctly:
+   - reused existing env config
+   - selected Single Job Config
+   - used no template (built from scratch)
+   - generated one job config
+2. But validation failed before write because generated YAML/content is malformed.
+3. The error output shows YAML parsing failures around lines similar to:
+   - source.storageaccount1: "edaaaecz1"${env}"cz",
+   - source.storageaccount2: "edaaaedle1"${env}"srz",
+   - FIELD_SPLITTER: ","
+4. This suggests the generator is producing invalid YAML/string concatenation syntax, likely mixing quoted literals and ${env} interpolation incorrectly.
 
-Tasks:
-1. Build a golden acceptance checklist for this scenario.
-2. Validate the actual end-to-end runtime flow in the Extension Development Host path as much as tooling allows.
-3. Ensure the final response clearly discloses:
-   - template/reference choice
-   - template mode
-   - env config reuse/create decision
-   - selected job shape
-   - optional artifacts selected or skipped
-   - validation result
-   - write/deploy allowed or blocked
-4. Verify that Single Job Config produces exactly one main job config artifact.
-5. Verify optional artifacts are only generated when explicitly selected.
-6. Verify generated artifacts are framework-compatible using etl-framework-adb as authoritative source and sample_repo as example source.
-7. Decide whether explicit source/target zones are a product requirement or whether intent extraction must also support less explicit prompts. If support is missing, document the gap clearly or implement it.
-8. Tighten acceptance coverage with tests for the exact customer_orders golden path.
-9. Produce a final acceptance report with:
-   - TODO checklist
-   - golden acceptance checklist
-   - runtime evidence
-   - gaps/risks
-   - exact files changed
-   - compile/test/audit results
-   - release readiness verdict
+What I will provide to you next in the chat:
+- the exact user request
+- the ETL Copilot chat response
+- the validation error output
+- the generated artifact preview/content
+- any Output / Debug Console / ETL Copilot logs I captured
 
-Rules:
-- Do not say “release ready” unless the acceptance checklist is satisfied.
-- Prefer evidence over explanation.
-- Do not silently rely on templates.
-- Use etl-framework-adb as authoritative for framework rules.
-- Use sample_repo as examples only.
-- Keep changes production-oriented.
+Your tasks:
+1. Use the evidence I provide as the source of truth.
+2. Identify the exact generator/rendering path that produced the invalid YAML/config.
+3. Trace whether the bug is in:
+   - env config rendering
+   - include file rendering
+   - variable interpolation / placeholder formatting
+   - YAML escaping / quoting rules
+   - template/build-from-scratch path
+4. Fix the root cause, not just the symptom.
+5. Add or update tests using this exact customer_orders failing scenario so the bug cannot regress.
+6. Verify the fix with:
+   - compile
+   - tests
+   - runtime-oriented evidence if possible
+7. Update the user-facing validation message if needed so it clearly points to the broken generated artifact and field.
+
+Important rules:
+- Do not guess.
+- Do not only patch tests.
+- Do not say “fixed” unless the real failing scenario is covered by tests and the rendering logic is corrected.
+- Prefer framework-compatible output using etl-framework-adb as authoritative source.
+- If YAML is not the correct format for that artifact, prove it from the repo and adjust the generator accordingly.
+- If quoting/interpolation must follow a specific framework pattern, cite the exact matching sample or authoritative implementation path in the codebase.
+- Keep a short repair report at the end with:
+  - root cause
+  - files changed
+  - tests added/updated
+  - why the generated YAML was invalid before
+  - why it is valid now
+
+Wait for my evidence messages and then debug from those exact artifacts.
