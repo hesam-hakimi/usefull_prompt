@@ -1,66 +1,53 @@
-Use the current successful customer_orders run as the baseline, but fix output quality issues in the generator itself.
+Fix the source-path normalization bug in the customer_orders generation flow.
 
-Problem confirmed from real Extension Development Host output:
-1. Reuse mode is correct, but the generated artifacts still have quality issues.
-2. Source path is hardcoded as a full abfss URI instead of preserving framework variable-based references where appropriate.
-3. The flow is over-split into extra transform artifacts for a simple bronze-to-silver case.
-4. Some values are duplicated across root job config and include artifacts.
-5. The goal is not just “validation passes”; the goal is “framework-compatible, minimal, clean output”.
+Confirmed bug from real generated output:
+- User prompt source was:
+  abfss://bronze@edaaaedle1devsrz.dfs.core.windows.net/BRONZE/customer_order
+- Generated job config changed it to:
+  ${adls.source.root}/core
+- This is incorrect:
+  1) the leaf name changed from customer_order to core
+  2) the explicit user path was replaced by an unverified symbolic path
+  3) the generator is inventing a normalized source path instead of preserving or correctly mapping it
 
-Source of truth:
-- etl-framework-adb = authoritative framework conventions
-- sample_repo = example output patterns
-- etl-framework-gen-utils = legacy/reference only, not authoritative generator logic
+This is NOT a validation bug.
+This is a generator bug in source extraction / blueprint normalization / rendering.
 
-Required fixes:
-1. Keep env reuse behavior exactly as-is:
-   - do NOT create a new env config
-   - do NOT modify existing env config
-   - response must continue to say reused existing env config
+Required behavior:
+1. If user provides an explicit source path, preserve it unless there is a verified framework mapping.
+2. Only convert explicit source paths into framework variables when the mapping is authoritative and lossless.
+3. Never change the source leaf/object name during normalization.
+4. Never replace an explicit source with a generic placeholder like /core.
+5. If confidence is low, keep the literal source path from the user prompt.
 
-2. Fix source-path rendering:
-   - do NOT emit hardcoded absolute bronze abfss URIs when a framework variable/root expression should be used
-   - preserve symbolic/env-based expressions in generated output
-   - use authoritative repo conventions to choose the correct variable form
-   - do not invent fake variables
+Implement the fix by reviewing:
+- IntentExtractor
+- BlueprintBuilder
+- JobConfigRenderer
+- any source-path normalization helper
+- any code that derives table.name, alias, source root, or logical source path from the request
 
-3. Reduce unnecessary fragmentation:
-   - for simple bronze-to-silver requests like this one, do not generate separate transform_filter + transform_derive artifacts unless the framework truly requires it
-   - prefer one transformation step when filter + derive can be represented cleanly together
-   - avoid duplicate logic between read_source and transform modules
+Add tests for these cases:
+1. Explicit bronze abfss source path remains unchanged when no verified variable mapping exists.
+2. If a verified mapping exists, the mapped output must preserve the same semantic path and same leaf name.
+3. customer_order must not become core.
+4. table name / alias inference must not rewrite the physical source path.
+5. Generated customer_orders scenario must assert the final read path is either:
+   - the original explicit abfss path
+   OR
+   - an authoritative framework variable expression that resolves to the same path
+   but never ${adls.source.root}/core unless that exact mapping is proven from source-of-truth examples.
 
-4. Remove duplicated semantics:
-   - source path/filter should not be redundantly represented in multiple places unless required by framework patterns
-   - include files should contain only what belongs there
+Decision rule to implement:
+- Prefer correctness over abstraction.
+- Literal explicit source path is better than an invented variable path.
 
-5. Compare generated output against sample_repo + framework examples:
-   - job naming
-   - module ordering
-   - include layout
-   - variable usage
-   - Synapse publish structure
-   - minimal artifact count for simple scenarios
+Also check whether inline ENV_CONFIG in the prompt is already being provided.
+If yes, do not ask the user to select env config again in this flow.
 
-6. Add/adjust tests:
-   - customer_orders single-job reused-env scenario must assert:
-     a) no env file is written
-     b) source uses framework variable form, not hardcoded abfss literal
-     c) target path uses framework variable form
-     d) simple scenario does not create unnecessary extra transform artifacts
-     e) no TODO/TBD/placeholders
-   - update golden output assertions accordingly
-
-7. Produce a short final report with:
-   - before vs after artifact structure
-   - before vs after path rendering
-   - exact files now generated
-   - compile/test results
-
-Important acceptance criteria:
-- Reuse mode stays intact
-- No new env config file
-- No hardcoded full source abfss URI in final generated artifacts when a framework variable expression is expected
-- Minimal artifact set for this simple case
-- Output must match framework/sample patterns better than current output
-
-Create TODOs first, inspect the real generated customer_orders files, inspect authoritative examples in etl-framework-adb and sample_repo, then implement the fix.
+Acceptance criteria:
+- Re-run the exact customer_orders prompt
+- Show before/after for source-path handling
+- Show exact generated read_source.path
+- Show test evidence
+- No regression in reuse-mode behavior
