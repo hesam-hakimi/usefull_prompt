@@ -1,100 +1,94 @@
 Create TODOs first and keep them updated until everything below is completed.
 
-Do NOT assume the issue is fixed just because tests pass.
-The source of truth is the REAL runtime behavior in my actual workspace.
+We have narrowed the real runtime issue. Do NOT restart from scratch. Fix the remaining real blocker using the actual workspace structure and real runtime evidence.
 
-Current real failure evidence:
-- Same customer_orders prompt still fails in the Extension Development Host
-- Chat says: "Job artifacts generated, but validation failed. Files were not written."
-- Errors shown at runtime:
-  - Unresolved variable: adls.source.root
+Current real runtime state from the latest customer_orders run:
+- Reused env config: env_conf/dev/env_config_dpv_dev.yaml
+- Existing env config is not modified
+- Strict syntax validation for reused env config is skipped correctly
+- Source path generation is now much better and no longer the main blocker
+- Remaining blocking validation error:
   - Unresolved variable: adls.curated.customer_order.root
-  - Missing required property: process.name
-  - Missing required property: jobname
-- There is also a nested include/common-config warning in the real env-config chain
+- Current non-blocking warning:
+  - Include not found in workspace: ../../../etl-curated-aaacz/version_conf/version_placeholders.yaml
+    from env_conf/conf/common_config.yaml
+- Chat also shows include files:
+  - sql/ascend2/customer_orders_curated/customer_orders_curated_source.yaml
+  - conf/sql/transform_filter.json
+  - conf/sql/transform_derive.json
+  - conf/sql/write_target.json
 
-Your task:
-1. Reproduce the failure using the exact real customer_orders scenario in the actual workspace.
-2. Verify the latest code changes are truly applied:
-   - all chat edits are kept
-   - compile/watch picked them up
-   - Extension Development Host restarted with latest code
-3. Add detailed runtime logging for:
+What I need:
+Find out exactly why the generated output still references `adls.curated.customer_order.root`, and change generation/validation so it follows the REAL framework convention used in this repo.
+
+Mandatory tasks:
+1. Add targeted runtime logging for this exact scenario:
    - selected env config path
-   - include resolution chain
-   - merged effective config keys
-   - generated job config keys
-   - unresolved variable list
-   - required-property validation source
-4. Fix validation/generation against the REAL repo structure, not mocks.
+   - include resolution chain for env_conf/dev/env_config_dpv_dev.yaml
+   - effective merged key list filtered to:
+     - adls.*
+     - source.*
+     - destination.*
+     - curated.*
+     - synapse.*
+     - data.dir / ctrl.dir / metadata.dir
+   - the exact generated target-path expression
+   - the exact code path that decided to use `adls.curated.customer_order.root`
+   - whether that variable exists in the merged effective config
+   - closest matching real keys from workspace/env/common config
 
-Required fixes:
-A. Include resolution
-- Resolve env config includes recursively before validating job config.
-- Support nested include chains.
-- Distinguish:
-  - missing include inside workspace = error
-  - external include outside workspace that is expected in enterprise layout = warning unless it blocks required keys
-- Show the full include chain in debug logs.
+2. Inspect the real workspace patterns before changing code:
+   - sample repo
+   - etl framework repo
+   - current real env/common config chain
+   - existing job config examples that write curated/silver outputs
+   Determine the actual naming convention for target output paths in this repo.
+   Do NOT invent a new variable convention.
 
-B. Variable resolution against real framework keys
-- Build effective merged config from:
-  - reused env config
-  - its nested includes
-  - common config
-  - job config
-- Validate unresolved variables against the merged effective config, not isolated fragments.
-- Identify why adls.source.root and adls.curated.customer_order.root are unresolved in this real repo.
-- Compare with actual sample files in the workspace and choose the real variable naming convention used by this repo.
+3. Fix target path generation:
+   - If the framework expects an existing generic target variable, use that
+   - If the framework expects composition from smaller keys, generate that correctly
+   - Do NOT generate `adls.curated.customer_order.root` unless it is actually defined in merged config
+   - Reuse real framework naming from examples in the workspace
 
-C. Path generation correctness
-- If the user prompt already provides a full abfss:// source path, do NOT generate:
-  ${adls.source.root}/abfss://...
-- Either:
-  1. keep the full literal abfss path, or
-  2. map it to the correct framework variable form actually used in this repo.
-- Do the same for target path generation.
+4. Fix validation behavior for external includes:
+   - Missing include outside workspace should remain a warning unless it is required to resolve a variable actually used by this request
+   - Clearly distinguish:
+     - blocking unresolved variable
+     - non-blocking external include not present locally
 
-D. Required root properties
-- Find from real framework examples in the workspace which root properties are mandatory for this repo.
-- Ensure process.name and jobname are generated correctly for this customer_orders scenario.
-- Do not invent fake defaults unless they match actual framework patterns.
+5. Add regression coverage for this exact scenario:
+   - reused env config
+   - nested common-config include chain
+   - bronze -> silver customer_orders single-job flow
+   - full source abfss path provided by user
+   - target path generated using real framework convention
+   - validation passes when merged effective config contains the required target definition
+   - write blocked only for true unresolved runtime dependencies
 
-E. Real-repo comparison
-- Compare generated customer_orders output against:
-  - real sample repo patterns
-  - real framework repo patterns
-  - previous legacy solution only as reference, not source of truth
-- Explain the exact gap between generated output and actual repo expectations.
-
-F. Regression protection
-- Add at least one end-to-end regression test based on the real customer_orders scenario structure.
-- The test must cover:
-  - reused env config
-  - nested includes
-  - full abfss source path in prompt
-  - single-job flow
-  - validation pass when real required keys are available
-  - write blocked only when a real unresolved dependency remains
+6. Prove the fix with REAL runtime evidence in the Extension Development Host:
+   - rerun the same customer_orders request
+   - show the generated target expression
+   - show validation result
+   - show whether write is blocked or allowed
+   - show exact runtime logs that explain why the chosen target variable/expression is correct
 
 Acceptance criteria:
-1. Re-running the exact customer_orders prompt in the Extension Development Host must no longer fail for:
-   - adls.source.root
-   - adls.curated.customer_order.root
-   - process.name
-   - jobname
-2. The generated source path must not contain duplicated prefix patterns like:
-   ${adls.source.root}/abfss://...
-3. The result must show real runtime evidence, not only tests.
-4. If anything is still blocked, clearly explain the exact remaining blocker and whether it is generation, validation, include resolution, or missing real config.
-5. End with:
+1. The real customer_orders run must no longer fail on:
+   - Unresolved variable: adls.curated.customer_order.root
+2. The generated target path/expression must match actual framework patterns from the real workspace.
+3. External include warning must not block write unless it truly causes unresolved variables for this request.
+4. Final response must include:
    - TODO checklist
    - files changed
-   - exact runtime proof from the real customer_orders run
+   - exact root cause
+   - before vs after target-path generation logic
+   - real runtime proof from the actual workspace
    - compile result
    - test result
 
 Important:
-- Do not declare success based only on unit tests.
-- Real runtime proof in the actual workspace is mandatory.
+- Do not declare success from tests alone.
+- Real runtime proof is mandatory.
 - Use the real repo as source of truth.
+- Be explicit about which exact existing key/pattern replaced `adls.curated.customer_order.root`.
