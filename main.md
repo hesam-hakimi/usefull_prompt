@@ -1,59 +1,66 @@
-We now have a real runtime failure with concrete evidence. I want you to debug and fix it using the exact runtime artifacts and logs, not assumptions.
+We found the real issue. Create TODOs first and keep them updated until everything below is fully implemented and verified.
 
-Create TODOs first and keep them updated until all items are completed.
+Important new evidence:
+The reused env config file is NOT standard YAML even though it has a .yaml extension.
+It is framework-style HOCON/config syntax.
 
-Goal:
-Fix the malformed YAML / config rendering issue in the real ETL create flow for the customer_orders scenario.
+Example characteristics from the real file:
+- include "../conf/common_config.yaml",
+- include "../conf/spark_config.yaml",
+- ENV: DEV,
+- key:value entries with commas
+- string interpolation like "edaaaecz1"${env}"cz"
+- framework variables and includes
 
-What I observed in the real Extension Development Host run:
-1. The flow correctly:
-   - reused existing env config
-   - selected Single Job Config
-   - used no template (built from scratch)
-   - generated one job config
-2. But validation failed before write because generated YAML/content is malformed.
-3. The error output shows YAML parsing failures around lines similar to:
-   - source.storageaccount1: "edaaaecz1"${env}"cz",
-   - source.storageaccount2: "edaaaedle1"${env}"srz",
-   - FIELD_SPLITTER: ","
-4. This suggests the generator is producing invalid YAML/string concatenation syntax, likely mixing quoted literals and ${env} interpolation incorrectly.
+This means the current validation logic is wrong if it:
+1. treats env_conf/*.yaml as strict YAML
+2. parses reused existing env config with a YAML parser
+3. reports YAML syntax errors on framework-valid HOCON-style env config files
 
-What I will provide to you next in the chat:
-- the exact user request
-- the ETL Copilot chat response
-- the validation error output
-- the generated artifact preview/content
-- any Output / Debug Console / ETL Copilot logs I captured
+Required fixes:
+1. In reuse mode, do NOT create a new env config file.
+2. In reuse mode, do NOT rewrite the existing env config file.
+3. In reuse mode, do NOT validate the reused env config with a strict YAML parser.
+4. Detect env config format by workspace convention/content, not file extension alone.
+   - env_conf/** should be treated as framework env config
+   - if needed, use content-based detection:
+     - include "...",
+     - trailing commas
+     - ${...} interpolation
+5. Add a dedicated framework/HOCON-compatible validation path for env config files.
+6. If full HOCON parsing is not available, then in reuse mode:
+   - validate path existence
+   - validate required framework linkage assumptions
+   - skip strict YAML syntax validation for that reused env config
+7. Ensure pre-write validation only blocks on artifacts actually generated in this run, not on reused external config files unless there is a true framework validation failure.
+8. Update chat output to clearly say:
+   - env config reused
+   - existing file not modified
+   - parser/validator mode used for that env config
 
-Your tasks:
-1. Use the evidence I provide as the source of truth.
-2. Identify the exact generator/rendering path that produced the invalid YAML/config.
-3. Trace whether the bug is in:
-   - env config rendering
-   - include file rendering
-   - variable interpolation / placeholder formatting
-   - YAML escaping / quoting rules
-   - template/build-from-scratch path
-4. Fix the root cause, not just the symptom.
-5. Add or update tests using this exact customer_orders failing scenario so the bug cannot regress.
-6. Verify the fix with:
-   - compile
-   - tests
-   - runtime-oriented evidence if possible
-7. Update the user-facing validation message if needed so it clearly points to the broken generated artifact and field.
+What I observed:
+- The flow reused the existing env config
+- No new env config file should have been created
+- The validation failure came from parsing the reused env config as YAML
+- The actual file content is HOCON/framework-style, not strict YAML
 
-Important rules:
-- Do not guess.
-- Do not only patch tests.
-- Do not say “fixed” unless the real failing scenario is covered by tests and the rendering logic is corrected.
-- Prefer framework-compatible output using etl-framework-adb as authoritative source.
-- If YAML is not the correct format for that artifact, prove it from the repo and adjust the generator accordingly.
-- If quoting/interpolation must follow a specific framework pattern, cite the exact matching sample or authoritative implementation path in the codebase.
-- Keep a short repair report at the end with:
-  - root cause
-  - files changed
-  - tests added/updated
-  - why the generated YAML was invalid before
-  - why it is valid now
+What I need from you:
+1. Trace the exact validation path that touched the reused env config.
+2. Fix the validator/gating logic.
+3. Add regression tests for:
+   - reused env config with .yaml extension but HOCON-style content
+   - ${env} interpolation inside quoted fragments
+   - includes + trailing commas
+   - reuse mode should not create or rewrite env config
+   - reuse mode should not fail due to strict YAML parsing
+4. Run compile + tests.
+5. Give me a short repair report:
+   - root cause
+   - files changed
+   - tests added/updated
+   - why the old validation was wrong
+   - why the new behavior matches the ETL framework
 
-Wait for my evidence messages and then debug from those exact artifacts.
+Do not stop at test-only fixes.
+Do not assume .yaml means YAML.
+Use the actual ETL framework repo as source of truth for env config syntax.
