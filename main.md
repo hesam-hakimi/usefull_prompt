@@ -1,159 +1,95 @@
-# Next hardening pass: make output generation fully template-driven and doc-aligned
+# Next pass: end-to-end artifact fidelity and framework-shape verification
 
-The output strategy layer is now working and tests are green. Keep the current architecture and behavior intact.
+The output hardening pass is complete and green.
 
-## Current stable checkpoint
+Current confirmed state:
+- database/tibco include format is `.yaml`
+- output defaults are centralized in `OutputStrategyConfig.ts`
+- shared helpers render include paths, output paths, module names, view names, and assertion templates
+- rendered-config tests are passing
+- current test result: 258 passing, 0 errors, only pre-existing warnings
 
-Already working:
-- output strategies implemented:
-  - curated_load_enrich
-  - generic_dataframe_write
-  - database_out
-  - tibco_out
-- planner/advisor/validator are wired
-- BlueprintBuilder and PreWriteValidationPipeline are integrated
-- tests pass
-- do not regress the current passing suite
+## Goal
 
----
+Now perform an end-to-end fidelity pass to verify that the **actual generated artifacts** match framework conventions, not only internal planner/test expectations.
 
-## Goal of this pass
+## What to do
 
-Harden the implementation so output rendering is not only strategy-driven, but also **fully template-driven from framework docs/config conventions**, especially for:
+### 1. Add artifact-level golden tests
+Add tests that generate full job artifacts and compare them against expected framework-shaped outputs for these scenarios:
 
-- include artifact naming
-- include artifact format
-- assert.sql.after templates
-- database/tibco filename and path patterns
-- env fallbacks for mailbox/container/root variables
+1. curated load/enrich
+2. generic dataframe write
+3. database out
+4. tibco out
 
----
-
-## What to improve
-
-### 1. Align include artifact generation with framework conventions
-Review the framework docs and current renderer behavior.
-
-If the framework expects YAML-style include files for database/tibco data-out, then:
-- stop generating `.json` include files for those flows
-- generate the correct include format consistently
-
-If JSON is supported and intentional, prove that in code comments/tests and make it explicit.
-
-Do not leave this ambiguous.
-
----
-
-### 2. Make `assert.sql.after` selection fully template-driven
-Right now the generated examples still show shortened placeholder-style assertions like:
-
-- `SELECT true AS assertion, 'database' AS log_type, ...`
-- `SELECT true AS assertion, 'tibco' AS log_type, ...`
-
-Replace this with a doc-driven template selection approach.
-
-Requirements:
-- choose the correct assertion template for:
-  - database data file
-  - database control file
-  - tibco data file
-  - tibco control file
-- fill the required placeholders from strategy/context/env
-- validate that all required pins/fields are present before rendering
-- fail clearly if required doc-driven inputs are missing
-
----
-
-### 3. Make include filenames and output filenames configurable
-Add a doc/context-driven config layer for:
-- include filenames
-- generated output filenames
-- control file suffixes
-- codec suffixes
-- path segment naming
-- mailbox/container fallbacks
-
-At minimum, support controlled defaults from one central place instead of scattering literal names.
-
-Examples to centralize:
-- `database_out`
-- `database_ctrl_out`
-- `tibco_out`
-- `tibco_ctrl_out`
-- output file extension / suffix rules
-- control file naming rules
-- gzip / codec naming adjustments
-
----
-
-### 4. Make database/tibco path rendering rule-driven
-Centralize rendering for:
-- ADLS root
-- strategy-specific folder prefix
-- entity/table segment
-- runid segment
-- effective date segment
-- data vs control subfolder naming
-- tibco mailbox-related path rules
-- env fallback behavior
-
-This must be deterministic and testable.
-
----
-
-### 5. Add golden snapshot tests for rendered config
-Add snapshot-style tests for the final rendered config blocks, not only decision tests.
-
-Create exact output expectations for:
-- curated load/enrich
-- generic dataframe write
-- database out
-- tibco out
-
-Validate:
-- module names
-- method names
+Validate at artifact level:
+- module block names
+- include file names and extensions
 - include paths
-- inline SQL vs include usage
-- assert.sql.after shape
-- filenames
-- path patterns
-- required options
+- inline SQL vs external include placement
+- options.module / options.method
+- assert.sql.after structure
+- output path shape
+- filename / control-file naming
+- required env placeholders
+- required fallbacks
 
----
+### 2. Verify actual emitted include file contents
+Do not only test the include reference path.
+Also verify that the generated `.yaml` include files contain the correct SQL/body shape and are consistent with framework docs.
+
+For database out:
+- verify `database_out.yaml`
+- verify `database_ctrl_out.yaml`
+
+For tibco out:
+- verify `tibco_out.yaml`
+- verify `tibco_ctrl_out.yaml`
+
+### 3. Add “prompt-to-artifact” acceptance coverage
+Add acceptance tests that start from realistic user prompts and assert the final rendered artifact set.
+
+Example prompts:
+- “Read bronze customer_orders, filter active records, derive order_status, write to silver”
+- “Read curated orders and send data out to database with control file”
+- “Read curated orders and send data out to TIBCO with control file”
+- “Write transformed dataframe to parquet/csv only”
+
+For each, assert:
+- chosen strategy
+- rendered job config
+- rendered include files
+- warnings if applicable
+
+### 4. Enforce no drift between docs and renderer
+Create one small verification layer that fails when known framework conventions drift.
+
+Examples:
+- database/tibco include extension must remain `.yaml`
+- database/tibco strategy must stay dual-file
+- curated load/enrich must keep inline writer SQL unless explicitly documented otherwise
+- trivial writer SQL must never be externalized
+
+### 5. Report exact sample artifacts
+At the end, print the full before/after rendered examples for:
+- one database_out job
+- one tibco_out job
+
+Do not abbreviate with `...` in the final report.
+Show the real rendered shapes.
 
 ## Constraints
-
-- Do not regress the current passing suite.
-- Do not reintroduce trivial SQL externalization for writer/output modules.
-- Do not hardcode `customer_orders`.
-- Keep current strategy architecture.
-- Prefer one central rule source over scattered literals.
-- If a framework rule is still ambiguous, emit a warning and keep the current safe default.
-
----
-
-## Files likely to touch
-
-Only modify what is needed, likely around:
-- output strategy context/provider
-- output strategy planner
-- output strategy validator
-- blueprint builder / renderer
-- include rendering helper(s)
-- tests / snapshots
-
----
+- Do not regress current passing tests.
+- Do not reintroduce `.json` include refs for database/tibco.
+- Do not externalize trivial writer SQL.
+- Keep centralized config-driven helpers.
+- Prefer exact framework shape over invented simplification.
 
 ## Deliverables
-
-At the end, report back with:
-
-1. what was made fully template-driven
-2. whether database/tibco include format is JSON or YAML and why
-3. what defaults were centralized
-4. which env fallbacks were added
-5. before/after for:
-   - database out
-   - tibco out
-6. actual lint/test results
+Report back with:
+1. files changed
+2. new tests added
+3. full rendered sample artifacts for database_out and tibco_out
+4. actual lint/test results
+5. any remaining ambiguity still requiring framework clarification
