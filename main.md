@@ -1,71 +1,70 @@
-We need a focused fix pass for the ETL generator. Do not add unrelated features.
+Use `src/context_files/data_transformation.md` as a first-class implementation asset for generation and validation of ETL transformation modules.
 
-Problems seen from real output:
-1. The generated source module uses invented zone terminology like `bronze_zone`. In our framework, bronze input is the SRZ layer and should use framework-consistent naming such as `srz_zone` where appropriate.
-2. Silver/gold outputs are part of curated-zone behavior. Do not invent zone vocabulary if the framework/repo uses a different convention.
-3. The generated job config is expanding or composing paths incorrectly. When an existing env config is reused, the job config must keep HOCON variable expressions instead of hardcoding physical ABFSS paths.
-4. There is already a canonical HOCON example file in the extension repo at `src/context_files/hocon_template.txt`. The current implementation is not using it as a real generation asset.
-5. The current output is splitting simple logic too much. For a simple request like filter + derive + write + publish, use one main transform unless framework rules require otherwise.
-6. Do not create or modify env config when user selected reuse existing env config.
+Goal:
+Make transformation generation framework-aware, deterministic, and aligned with the documented `data_transformation` module contract.
 
-Required fixes:
-A. Zone / naming correction
-- Replace generated source type terminology with framework-consistent SRZ terminology.
-- Ensure curated output uses framework-consistent naming for target/write modules.
-- Remove invented zone labels unless they are explicitly supported by repo examples.
+Requirements:
 
-B. HOCON path/interpolation correction
-- Keep source and target paths as HOCON expressions, not expanded physical paths, when env config is reused.
-- Follow canonical quoting/interpolation style from repo examples and from `hocon_template.txt`.
-- Example intent:
-  - source path should remain variable-based, like `"${adls.source.root}"/customer_order` or the correct framework equivalent
-  - target path should remain variable-based, like `"${adls.destination.root}"/customer_orders_curated`
-- Fix renderer so path/value interpolation is emitted as valid HOCON, not malformed JSON-like strings.
+1. Create `DataTransformationKnowledgeProvider` that loads and caches `src/context_files/data_transformation.md`.
 
-C. Use `hocon_template.txt` in implementation
-- Treat `src/context_files/hocon_template.txt` as a packaged canonical template asset.
-- Load it at runtime from the extension package, not as dead documentation.
-- Feed it into the generation pipeline so the model/blueprint renderer uses real framework HOCON structure.
-- Use it to drive generation of:
-  - data sourcing module structure
-  - data transformation module structure
-  - dataframe writer structure
-  - valid interpolation/quoting conventions
-- Add a small helper/provider for this template and unit tests that confirm:
-  - template file loads successfully
-  - generation path actually consumes it
-  - expected tokens from template influence rendered output
+2. Extract structured rules from the markdown, including:
+- module name: `data_transformation`
+- method name: `process`
+- supported top-level keys such as `sql`, `include`, `name`, `loggable`, `drop.columns`, `masking.columns`
+- supported option keys such as `module`, `method`, `filter`, `location`, `table`
+- whether inline SQL is supported
+- whether external file references are supported
+- requirement that external include paths be relative
+- rule that config must be fully resolved before execution
+- rule that each transform result is registered as a temp view by `name`
 
-D. Transform consolidation
-- For simple flow requests, consolidate into one main transform instead of unnecessary multiple transform fragments, unless framework rules explicitly require split modules.
-- Keep includes only where they add real value and match framework patterns.
+3. Use these rules in generation:
+- generate `data_transformation` blocks only for transformation logic
+- choose between inline SQL and external include based on complexity
+- prefer external include for larger SQL logic
+- generate one main transform for simple flows, and chained temp-view transforms for multi-step flows
+- use documented keys only
+- do not place writer/sync behavior inside transformation modules
 
-E. Env config reuse rule
-- If the user selected an existing env config, never create a new env config file.
-- Job config must reference env-driven variables and assume runtime linkage.
+4. Add `DataTransformationValidator`:
+- require `options.module === "data_transformation"`
+- require `options.method === "process"`
+- validate supported key set
+- validate include path is relative
+- validate `name` exists for temp-view registration
+- reject or warn on unresolved config placeholders that should have been resolved before execution
+- reject unsupported invented fields
 
-Implementation guidance:
-1. Find the code that assigns source zone/type names and fix it to use framework terminology.
-2. Find the renderer that emits `path`, `target-path`, and related HOCON values and make it follow template-driven quoting/interpolation.
-3. Introduce a `HoconTemplateProvider` or similar helper that reads `src/context_files/hocon_template.txt`.
-4. Inject that template into the generator / blueprint builder / prompt construction path.
-5. Add regression tests for:
-   - SRZ source generation
-   - curated target generation
-   - reused env config does not create env file
-   - path values remain variable-based
-   - rendered HOCON matches template style
-   - simple customer_orders flow uses consolidated transform structure
+5. Add normalization:
+- map invented transform shapes to the closest documented structure
+- convert large inline SQL into external include when appropriate
+- collapse trivial multi-step transforms into one main transform where possible
+- keep multi-step temp-view chaining only when it adds clarity or is needed by the request
 
-Use the screenshots as behavioral evidence:
-- left-side reference config shows the expected style
-- right-side current generated config shows the wrong style
+6. Update prompt building:
+- inject only the relevant transformation doc fragments
+- include one or two matching examples from `data_transformation.md`
+- include module behavior reminders:
+  - temp view registration by `name`
+  - config must be fully resolved before execution
+  - use external files for modularity and reuse
+
+7. Add tests for:
+- inline SQL transform generation
+- external include transform generation
+- relative include path enforcement
+- name/temp-view registration enforcement
+- unresolved-placeholder validation failure
+- drop.columns support
+- masking.columns support
+- simple flow collapsing into one main transform
+- multi-step flow chaining via temp views
 
 Return format:
 1. Root cause
 2. Files changed
-3. Exact behavior before
-4. Exact behavior after
-5. Tests added/updated
-6. Proof that `hocon_template.txt` is now used in implementation
-7. Re-run result for customer_orders
+3. Structured rules extracted from `data_transformation.md`
+4. How generation changed
+5. How validation changed
+6. Tests added
+7. Proof that `data_transformation.md` is now actively used by implementation
