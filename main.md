@@ -1,199 +1,251 @@
-# Fix output-strategy regression without changing intended design
+# Next step: make output strategy fully doc-driven using the provided framework docs
 
-You already implemented the output strategy layer, but the latest run shows acceptance regressions.
+The previous regression is fixed and the suite is green again.
 
-## Current failure summary
+## Current stable checkpoint
 
-From the latest test run:
+Confirmed from the last run:
 
-- `npm test` ran
-- lint reported warnings only, no new errors
-- **8 tests are failing in the extension E2E / acceptance suite**
-- important failures include:
-  - `customer_orders scenario passes and writes after validation: expected write count 1 but got 0`
-  - scenarios `1-7` in End-to-End Acceptance Tests returned `failed` instead of `completed`
-  - multiple failures mention:
-    - `Trivial SQL fragment split into its own file: conf/sql/write_curated.json`
-- VS Code test harness also logged:
-  - `Error mutex already exists`
+- trivial writer SQL is no longer externalized
+- output/write SQL stays inline
+- generic `then` no longer forces false multi-step transformation splitting
+- simple curated flow now passes
+- `npm test` passes
+- remaining lint warnings are pre-existing
+- VS Code mutex warning is non-blocking for now
 
-## Objective
-
-Fix the regression introduced by the output-strategy changes **without removing the new output-strategy architecture**.
-
-Do not start a new feature.
-Do not redesign the system.
-Do a focused bug-fix pass.
+Do not re-open that regression unless required.
 
 ---
 
-## What to investigate first
+## Goal of this step
 
-### 1. Trivial SQL externalization regression
-Find where output rendering now externalizes small/trivial SQL fragments into files like:
+Implement the **next layer** of output generation so the extension chooses and renders the correct output modules using the framework guidance from these docs:
 
-- `conf/sql/write_curated.json`
+- `src/context_files/load_enrich.md`
+- `src/context_files/dataframe_writer.md`
+- `src/context_files/dataout_database.md`
+- `src/context_files/dataout_tibco.md`
 
-This appears to be breaking the acceptance expectations for the simple curated flow.
-
-For simple write/output modules, trivial SQL such as:
-- `SELECT * FROM main_transform`
-- similar one-line writer SQL
-should **not** be unnecessarily split into separate include files unless the framework/docs explicitly require it.
-
-Check whether the new output planner or renderer is applying externalization too aggressively.
-
-### 2. Missing write after validation
-Trace why the `customer_orders` scenario now ends with:
-
-- expected write count = 1
-- actual write count = 0
-
-Determine whether:
-- the writer module is no longer emitted
-- the writer module is emitted incorrectly
-- validation blocks it
-- the output strategy planner selects the wrong output mode
-- the rendered artifact path/type prevents the acceptance harness from counting the write
-- the artifact is being converted into a split include pattern that the acceptance tests do not treat as a real write step
-
-### 3. End-to-end status regression
-Investigate why scenarios now end as:
-- `failed`
-instead of:
-- `completed`
-
-Do not patch this superficially.
-Find the first causal regression in the flow.
+The result must be **rule-driven**, not hardcoded to one example like `customer_orders`.
 
 ---
 
-## Required fix behavior
+## What to build
 
-### A. Preserve the new output strategy layer
-Keep:
-- advisor
-- planner
-- validator
-- chat/session/response integration
+Create or complete a doc-driven output strategy layer that decides among these output modes:
 
-Do **not** remove the architecture.
+1. `curated_load_enrich`
+   - use `load_enrich_process`
+   - for curated silver/gold write flows where framework-managed load/merge behavior is needed
 
-### B. Restore old acceptance behavior for simple curated write flows
-For a simple case like:
+2. `generic_dataframe_write`
+   - use `dataframe_writer`
+   - for generic file/delta/csv/parquet/synapse output when `load_enrich_process` is not the correct framework path
 
-- read bronze customer_orders
-- filter active records
-- derive order_status
-- write to silver
+3. `database_out`
+   - generate the required dual-module pattern:
+     - database data file
+     - database control file
+   - follow the rules from `dataout_database.md`
 
-the generated result must still behave like a normal successful curated write flow.
-
-If the output strategy chooses curated/load behavior, the rendered output must still satisfy the acceptance harness expectations.
-
-### C. Stop splitting trivial output SQL into separate files
-Implement a rule like this:
-
-- trivial writer/output SQL stays inline
-- only substantial SQL that benefits from externalization should be split
-- do not externalize tiny pass-through write SQL unless explicitly required
-
-This rule must be narrow and safe.
-
-### D. Keep transformation externalization rules separate from output externalization rules
-Do not let transformation SQL splitting logic accidentally apply to output/write modules.
+4. `tibco_out`
+   - generate the required dual-module pattern:
+     - tibco data file
+     - tibco control file
+   - follow the rules from `dataout_tibco.md`
 
 ---
 
-## Implementation guidance
+## Required design rules
 
-### 1. Review these areas carefully
-Inspect and fix the interaction among:
-- `OutputStrategyPlanner.ts`
-- `BlueprintBuilder.ts`
-- `JobConfigRenderer.ts`
-- any include/externalization helper used during rendering
-- pre-write validation
-- acceptance fixture expectations
+### A. Strategy decision must be explicit
+Add or complete an output decision object stored in session state and returned in chat response, similar to the transformation decision.
 
-### 2. Distinguish between:
-- transformation SQL modules
-- output/write modules
-- database_out dual-file output
-- tibco_out dual-file output
-- curated load/enrich flow
+It should clearly state:
+- selected strategy
+- confidence
+- reasons
+- warnings
 
-Make sure trivial output modules are not treated like transformation modules for externalization purposes.
+### B. Use the docs as the source of truth
+Do not invent config shapes.
 
-### 3. Acceptance compatibility matters
-If the acceptance suite expects:
-- one write module
-- one final write artifact
-- direct inline SQL for simple writer cases
+Use the docs to drive:
+- module name
+- method
+- required options
+- inline vs include behavior
+- metadata/assertion requirements
+- special path/filename rules
+- dual-file requirements
+- TIBCO-specific or database-specific metadata fields
 
-then preserve that behavior.
+### C. Preserve backward compatibility for simple curated flows
+Simple bronze-to-silver / bronze-to-gold flows that previously worked must still render correctly and pass validation.
 
-Do not force a more “modular” rendering if it breaks expected framework behavior.
+Do not break:
+- inline write behavior
+- simple writer naming
+- current passing acceptance flow
 
----
-
-## Required code changes
-
-Make the minimum necessary code changes to:
-- stop trivial output SQL splitting
-- restore simple write counting
-- restore scenario completion status
-- preserve output-strategy architecture
-
-Add/update tests to cover the regression.
+### D. Separate decision from rendering
+Keep these responsibilities separate:
+- advisor: decide the output strategy
+- planner: convert the strategy into a blueprint/output plan
+- validator: ensure emitted config matches framework requirements
+- renderer/builder: render the actual modules/files
 
 ---
 
-## Required tests
+## Output decision guidance
 
-Add or update focused tests for:
+### 1. Use `curated_load_enrich` when:
+- request is writing into curated zone
+- load/merge/SCD/CDC semantics are implied
+- target is framework-managed curated output
+- docs indicate `load_enrich_process` is the correct mechanism
 
-1. simple curated flow still produces one effective write step
-2. trivial output SQL is kept inline
-3. transformation SQL externalization rules do not leak into writer/output modules
-4. database_out still uses its expected dual-file pattern
-5. tibco_out still uses its expected dual-file pattern
-6. output-strategy decision still appears in state/response/chat
-7. customer_orders acceptance scenario passes again
+### 2. Use `generic_dataframe_write` when:
+- request is simply writing a dataframe/file/output
+- output is csv/parquet/delta/synapse
+- no specialized curated load behavior is required
+- docs indicate `dataframe_writer` is sufficient
 
-If a fixture changed unnecessarily, revert it unless the new behavior is explicitly required by the docs.
+### 3. Use `database_out` when:
+- intent explicitly indicates data-out to database
+- required metadata handoff is needed
+- dual-file pattern is needed:
+  - database data file
+  - database control file
 
----
-
-## VS Code mutex note
-
-The test harness warning
-- `Error mutex already exists`
-may be environmental.
-
-Do not blame that first.
-
-First fix the deterministic regression shown by:
-- write count = 0
-- trivial SQL split into its own file
-- scenario status = failed
-
-Then re-run tests.
-If failures remain and are only harness-related, report that separately.
+### 4. Use `tibco_out` when:
+- intent explicitly indicates tibco/mailbox delivery
+- dual-file tibco pattern is required:
+  - data file
+  - control file
+- TIBCO metadata requirements must be generated
 
 ---
 
-## Deliverables
+## Required validations
 
-At the end provide:
+Implement or complete validations from the docs.
 
-1. Root cause found
-2. Files changed
-3. Exact fix applied
-4. Before/after example for the simple curated write case
-5. Actual command results for:
+### For `load_enrich_process`
+Validate at least:
+- module/method are correct
+- write mode / zone / keys / CDC / SCD fields are consistent
+- curated-zone semantics are respected
+- invalid mixes of SCD/CDC flags are rejected or warned appropriately
+
+### For `dataframe_writer`
+Validate at least:
+- supported format
+- required `sql`
+- required `options`
+- valid path / mode / partitioning / compression / filename constraints
+- synapse-specific options when synapse output is selected
+
+### For `database_out`
+Validate at least:
+- both data and control modules exist
+- correct include or SQL structure
+- required metadata/assertion output exists for next step
+- required path/schema/table fields exist
+- generated config follows the dual-file contract from the doc
+
+### For `tibco_out`
+Validate at least:
+- both data and control modules exist
+- filename/mailbox/container/assertion metadata are present
+- ETL2.0 additions are handled correctly if applicable
+- control/data path logic matches the doc
+- required `assert.sql.after` metadata shape is present
+
+---
+
+## Intent extraction updates
+
+Extend intent extraction so the user prompt can signal:
+- curated write / curated publish
+- generic dataframe/file output
+- database out
+- tibco out
+
+Use wording clues, but keep decisions conservative.
+If ambiguous, prefer warning/review-required over inventing specialized output behavior.
+
+---
+
+## Files to create or complete
+
+Create or update the relevant files for:
+- output strategy advisor
+- output strategy planner
+- output strategy validator
+- output strategy types/index
+- intent extraction
+- session state
+- create response
+- chat participant output summary
+- pre-write validation pipeline
+- blueprint builder / renderer integration
+- tests
+
+Keep naming aligned with the current structure already introduced in the project.
+
+---
+
+## Tests required
+
+Add/update tests for all of these:
+
+1. simple curated flow chooses `curated_load_enrich` or the correct existing curated strategy and still passes
+2. generic dataframe write chooses `generic_dataframe_write`
+3. database-out request generates both:
+   - db data out
+   - db control out
+4. tibco-out request generates both:
+   - tibco data out
+   - tibco control out
+5. missing required database-out metadata fails validation
+6. missing required tibco metadata fails validation
+7. output decision is surfaced in:
+   - session state
+   - create response
+   - chat summary
+8. old passing customer_orders scenario still passes
+
+---
+
+## Important constraints
+
+- Do not reintroduce trivial SQL externalization for writer/output modules.
+- Do not hardcode `customer_orders`.
+- Do not change passing behavior unless required by the docs.
+- Prefer doc-driven rule tables/helpers over scattered conditionals.
+- Keep UX clear:
+  - show selected output strategy
+  - explain why it was chosen
+  - show warnings when assumptions are made
+
+---
+
+## Deliverables at the end
+
+Report back with:
+
+1. output strategies implemented
+2. decision rules added
+3. validation rules added
+4. files changed
+5. before/after example for:
+   - curated load/enrich
+   - database out
+   - tibco out
+6. actual results for:
    - lint
    - tests
 
-Do not stop at “I found the issue”.
-Fix it and run the tests.
+Do the implementation and run the tests.
