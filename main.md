@@ -1,73 +1,278 @@
-Fix the path handling so the generated ETL job config does NOT hardcode full storage paths.
+# Confluence Page Write Capability – Detailed Requirements
 
-Problem
-The generated job config currently contains literal paths like:
-abfss://bronze@...dfs.core.windows.net/BRONZE/customer_order
+## Objective
+Enable the VS Code + GitHub Copilot tooling to **create, update, append, and upsert Confluence pages** safely, with preview and section-level control.
 
-I do NOT want full physical paths embedded in the job config or include files when they should come from env config.
+---
 
-Desired behavior
-1. Reuse env-config variables for source and target paths.
-2. Keep job config environment-agnostic.
-3. Only use literal full paths when there is no approved env-config variable and that case must be surfaced explicitly.
-4. Do not silently inline resolved paths into the generated job config.
+## Core Capabilities
+- Search page
+- Get page content + metadata
+- Create page
+- Update full page
+- Append content
+- Replace section by heading
+- Upsert (create if missing, update if exists)
+- Preview (dry run)
 
-What I want instead
-- Put reusable path roots in env config.
-- Reference them in job config / include files using variables.
-- Validation should resolve those variables against the selected env config, but generated artifacts should preserve the variable references.
+---
 
-For this customer_orders scenario
-Current wrong pattern:
-- source path is rendered as a full abfss path inside the job config
+## Functional Requirements
 
-Expected pattern:
-- source should use an env-config-backed variable reference
-- target should use an env-config-backed variable reference
-- generated files should keep the variable expression, not the resolved final value
+### 1. Page Resolution
+- Must support lookup by:
+  - spaceKey
+  - title (exact match preferred)
+  - parentPageId (optional)
+- If multiple matches → return ambiguity error (no auto-write)
 
-Example expectation
-Wrong:
-path: "abfss://bronze@edaaaed1e1devsrz.dfs.core.windows.net/BRONZE/customer_order"
+---
 
-Preferred:
-path: "${adls.source.root}/customer_order"
+### 2. Create Page
+Inputs:
+- spaceKey
+- title
+- content (markdown)
+- optional parentPageId
 
-or, if framework requires a more specific env key:
-path: "${adls.source.customer_order.root}"
+Behavior:
+- Create page if not found
+- Return pageId, URL, version
 
-Use the framework’s real existing env-config naming conventions where available.
-Do NOT invent new keys if an equivalent approved key already exists in the repo or standards.
+---
 
-Important rules
-A. If env config is reused, do NOT create a new env config file.
-B. If the selected env config already contains the needed source/target root variables, preserve variable references in output.
-C. If a needed variable is missing, report that clearly and block write with a specific message like:
-   - missing env-config key: adls.source.root
-   - missing env-config key: adls.destination.root
-Do NOT replace the missing variable with a literal path.
-D. Validation must resolve variables using the selected env config, but rendering must keep variable placeholders.
-E. This must apply to both:
-   - main/root job config
-   - generated include files such as source yaml / transform / write include files
+### 3. Update Page
+Inputs:
+- pageId
+- content
 
-Required implementation work
-1. Find where the source path is being normalized/rendered into a literal path.
-2. Change rendering so it emits variable references instead of resolved storage URIs.
-3. Keep resolution logic only inside validation/runtime checking, not output generation.
-4. Verify reused env config mode does not create or modify env config files.
-5. Add tests that prove:
-   - reused env config + variable-backed source path stays as ${...} in generated files
-   - reused env config + variable-backed target path stays as ${...} in generated files
-   - missing env key fails validation without inlining literal paths
-   - write is blocked when required env variable is missing
-   - write succeeds when env variable exists
-6. Show exact before/after for customer_orders.
+Behavior:
+- Fetch current version
+- Update safely
+- Fail on version conflict (default)
 
-Return format
-A. Root cause
-B. Exact code locations changed
-C. Before/after artifact snippet
-D. Tests added
-E. Proof that generated files now preserve variable references
-F. Proof no new env config file was created
+---
+
+### 4. Append Content
+Modes:
+- end of page
+- under heading
+
+Behavior:
+- Preserve existing content
+- Clean formatting
+
+---
+
+### 5. Replace Section
+Inputs:
+- pageId
+- heading
+- newContent
+
+Behavior:
+- Replace content under heading only
+- Fail if heading not found (default)
+
+---
+
+### 6. Upsert Page (IMPORTANT)
+Behavior:
+- If page exists → update
+- If not → create
+
+Modes:
+- create_only
+- update_only
+- upsert (default)
+
+---
+
+### 7. Preview (Dry Run)
+Must:
+- show operation type
+- show target page
+- show summary of changes
+- NOT write anything
+
+---
+
+## Tool Contracts (Examples)
+
+### create
+{
+  "spaceKey": "DATA",
+  "title": "ETL Deployment",
+  "content": "# Title",
+  "contentFormat": "markdown"
+}
+
+### upsert
+{
+  "spaceKey": "DATA",
+  "title": "ETL Deployment",
+  "content": "# Title",
+  "mode": "upsert"
+}
+
+---
+
+## VS Code Extension Requirements
+
+### MUST RULE
+Every feature must exist in BOTH:
+- Copilot tool list
+- VS Code sidebar/commands
+
+---
+
+### Required Tools
+- confluence_search_pages
+- confluence_get_page
+- confluence_create_page
+- confluence_update_page
+- confluence_append_page
+- confluence_replace_section
+- confluence_upsert_page
+- confluence_preview_write
+
+---
+
+## Best Practices – DESIGN
+
+### Safety First
+- Always resolve page before write
+- Never write if ambiguous
+- Always support preview
+- Fail safely
+
+---
+
+### Prefer Section Updates
+Avoid full overwrite. Use:
+- replace section
+- append section
+
+---
+
+### Idempotency
+- Re-running should not duplicate content
+- Upsert must not create duplicates
+
+---
+
+### Logging
+Log:
+- operation
+- target page
+- result
+- warnings/errors
+
+---
+
+## Best Practices – WRITING CONTENT
+
+### Structure
+Use consistent structure:
+
+# Title
+## Overview
+## Steps
+## Validation
+## Results
+## Next Actions
+
+---
+
+### Headings
+Use stable headings so future updates work:
+- "Deployment Steps"
+- "Validation Results"
+
+---
+
+### Readability
+- short paragraphs
+- bullet lists
+- code blocks for scripts
+
+---
+
+### Code Formatting
+Use fenced blocks:
+
+```python
+print("hello")
+```
+
+```sql
+SELECT * FROM table
+```
+
+---
+
+### Avoid
+- raw logs
+- duplicate headings
+- messy formatting
+
+---
+
+## Security Requirements
+- do not log secrets
+- validate permissions
+- prevent wrong-page writes
+
+---
+
+## Acceptance Criteria
+
+- create page if missing
+- update page if exists
+- upsert works correctly
+- replace section works safely
+- preview does not write
+- ambiguity handled safely
+- tools visible in Copilot + sidebar
+
+---
+
+## Deliverables
+
+### Code
+- API client
+- page resolver
+- writer logic
+- preview logic
+
+### UI
+- sidebar commands
+- Copilot tools
+
+### Tests
+- unit tests
+- integration tests
+
+### Docs
+- usage examples
+- tool contracts
+
+---
+
+## Recommended First Version
+- search + get page
+- create page
+- update page
+- upsert page
+- replace section
+- preview mode
+
+---
+
+## Final Note
+Default behavior should prioritize:
+- safety
+- clarity
+- predictability
+
+Never sacrifice correctn
