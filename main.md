@@ -1,134 +1,141 @@
-# Copilot Implementation Prompt — Next Layer: Data Sourcing Guidance Integration
+# Copilot Implementation Prompt — Next Layer: Data Transformation Guidance Integration
 
 Use this prompt in GitHub Copilot Chat / Codex inside the extension workspace.
 
 ---
 
-## First: quick review of the previous layer
+## Review of the sourcing layer
 
-The external-module layer looks good enough to move forward.
+The sourcing layer looks good enough to move forward.
 
-Two small follow-up checks should be kept in mind while implementing this next layer:
+What appears correct from the report:
 
-1. The screenshot shows strategy value `internal_standard` while the original prompt used `native_framework`.
-   - Keep one canonical enum name everywhere, or document the rename clearly.
+- data sourcing guidance is now wired into generation, rendering, validation, and chat UX
+- `srz_zone` is used for bronze/raw
+- `curated_zone` is used for silver/gold
+- hardcoded ABFSS paths are rejected unless explicitly review-required
+- tests were added and `npm test` passes
+- the renderer now uses the project’s canonical HOCON interpolation style
 
-2. The screenshot proves native vs external coverage, but I do not yet see explicit proof for an ambiguous/hybrid scenario.
-   - Do not block this task on that.
-   - Add or keep that as a later hardening step.
+One item should remain visible as a tracked follow-up, but it should not block this next layer:
 
-Proceed with the next layer now.
+- curated root selection is still assumed as `${adls.destination.root}` for non-bronze sources unless a more explicit doc-driven mapping is added
+
+Proceed now with the **data transformation** layer.
 
 ---
 
 ## Goal
 
-Implement a **framework-guided data sourcing generation layer** so the ETL extension uses:
+Implement a **framework-guided data transformation generation layer** so the ETL extension uses:
 
-- `src/context_files/data_sourcing.md`
+- `src/context_files/data_transformation.md`
 - `src/context_files/hocon_template.txt`
-- existing `HoconTemplateProvider.ts` if present
+- any existing HOCON rendering/provider helpers
+- existing sourcing layer outputs
 
-to generate sourcing configs that follow real ETL framework behavior instead of ad-hoc guesses.
+to generate transformation configs that follow real ETL framework behavior instead of arbitrary SQL/module guesses.
 
 The main outcome is:
 
-1. generated sourcing config must follow the framework doc structure
-2. source paths in job config must use **framework variables**, not hardcoded full ADLS/ABFSS paths
-3. generated HOCON/JSON-style interpolated strings must be **quoted correctly**
-4. bronze/raw sources must use the correct framework zone terminology:
-   - **SRZ = standard raw zone**
-5. silver and gold sources/targets belong to **curated zone**
-6. the generator must stop inventing unstable path conventions when the framework guidance is insufficient
+1. generated transformation modules must follow the framework doc structure
+2. simple business logic should stay in **one logical transform step** unless the docs or request justify multiple chained steps
+3. temp-view chaining must follow the transformation module rules from the docs
+4. SQL, filter, location/table, masking, drop columns, and include-based patterns must be used only when supported
+5. config must be fully resolved before execution
+6. transformation output should be easier to review and closer to actual framework practice
 
 ---
 
-## Product rule
+## Core user pain this layer must fix
 
-**If an env/root variable exists, do not write the full physical storage path into the job config.**
-Prefer framework variables such as:
+From the earlier generated output, there was a tendency to:
 
-- `"${adls.source.root}/customer_orders"`
+- create too many transformation fragments
+- split logic into unnecessary steps
+- drift away from framework-native temp-view patterns
+- generate transformation structure without clearly following the documented module behavior
 
-instead of:
+This layer must make the extension prefer:
 
-- `"abfss://bronze@...dfs.core.windows.net/BRONZE/customer_orders"`
-
-The job config should stay environment-agnostic whenever possible.
+- one clean transformation block when the request is simple
+- external include/reference files only when they add real value
+- documented temp-view chaining when multiple steps are actually needed
 
 ---
 
 ## Source material that must become code behavior
 
-### A) `data_sourcing.md`
-Use this as the main behavioral source for sourcing generation.
+### A) `data_transformation.md`
+Use this as the primary behavioral source.
 
 At minimum, encode these documented points into structured logic:
 
-- supported source types include:
-  - `srz_zone`
-  - `curated_zone`
-- supported `read-format` patterns include:
-  - `view`
-  - `sql`
-  - `sql_script`
-  - `view_script`
-- sourcing module uses:
-  - `options.module = data_sourcing_process`
+- transformation config is JSON/HOCON-based
+- multiple SQL modules can exist, but should be used intentionally
+- SQL may reference:
+  - environment variables
+  - external files
+  - module options such as `filter`
+  - location or table
+- each SQL result is registered as a temp view in Spark
+- config supports:
+  - `options.module = data_transformation`
   - `options.method = process`
-- config uses:
-  - `sourceList`
-  - one or more named sources
-- config can use:
-  - `path`
-  - `view`
+  - `name`
+  - `loggable`
   - `sql`
-  - `filter`
-  - aliases / combine patterns where applicable
-- config should be fully resolved before execution
-- sources are registered as temp views for downstream processing
+  - `include`
+  - `drop.columns`
+  - `masking.columns`
+  - `options.filter`
+  - `options.location` or `options.table` when appropriate
+- the module itself does not execute side effects directly; it prepares transformed temp views for downstream steps
+- config must be fully resolved before execution
+- external file references are supported using relative paths
+- temp views can be chained across transformations
 
 ### B) `hocon_template.txt`
-Use this as the source of truth for interpolation style and quoting style.
+Use this to preserve the project’s expected HOCON/JSON-like rendering style.
 
-At minimum, follow these conventions:
+At minimum:
 
-- interpolated path strings must be rendered in quoted string form
-- do not emit broken mixed interpolation
-- do not emit unquoted path expressions when the template expects quoted strings
-- preserve valid HOCON/JSON-like structure already used by the framework
+- keep interpolation and quoting consistent with the house style already adopted in sourcing
+- avoid malformed strings
+- avoid mixing raw literal snippets with unresolved placeholders
+- reuse canonical rendering helpers instead of inventing transformation-specific quote logic
 
 ---
 
 ## Required implementation
 
-### 1) Add a structured data sourcing context provider
+### 1) Add a structured transformation context provider
 
 Create:
 
-- `src/core/context/DataSourcingContextProvider.ts`
+- `src/core/context/DataTransformationContextProvider.ts`
 
 This must read and normalize guidance from:
 
-- `src/context_files/data_sourcing.md`
+- `src/context_files/data_transformation.md`
 - `src/context_files/hocon_template.txt`
 
-It should expose something like:
+Suggested interface:
 
 ```ts
-export interface DataSourcingGuidance {
-  supportedSourceTypes: string[];
-  supportedReadFormats: string[];
+export interface DataTransformationGuidance {
   requiredOptions: {
     module: string;
     method: string;
   };
-  requiredTopLevelFields: string[];
-  supportedSourceFields: string[];
-  interpolationExamples: string[];
-  quotingRules: string[];
+  supportedFields: string[];
+  supportsExternalInclude: boolean;
+  supportsTempViewChaining: boolean;
+  supportedOptionKeys: string[];
+  supportedTopLevelKeys: string[];
   bestPractices: string[];
   antiPatterns: string[];
+  splittingRules: string[];
 }
 ```
 
@@ -136,202 +143,222 @@ This provider must return structured guidance, not only raw markdown text.
 
 ---
 
-### 2) Add a path rendering helper
-
-Create or extend a helper such as:
-
-- `src/core/rendering/InterpolatedPathRenderer.ts`
-
-or extend an existing HOCON helper if that is cleaner.
-
-This helper must render framework-variable-based paths safely.
-
-Examples:
-
-```ts
-renderInterpolatedPath("${adls.source.root}", "customer_orders")
--> "\"${adls.source.root}/customer_orders\""
-```
-
-```ts
-renderInterpolatedPath("${adls.destination.root}", "customer_orders_curated")
--> "\"${adls.destination.root}/customer_orders_curated\""
-```
-
-Required behavior:
-
-- always return correctly quoted config strings
-- normalize duplicate slashes
-- do not remove or corrupt `${...}` placeholders
-- do not silently singularize/pluralize table names
-- preserve the final entity suffix unless a documented naming rule explicitly changes it
-
-Important:
-If the source path is provided explicitly by the user as a full ABFSS path, the generator should try to convert it to an env-root-relative expression **only when it can do so safely**.
-If safe conversion is not possible, surface a review-required warning instead of inventing a wrong path.
-
----
-
-### 3) Add a sourcing decision advisor
+### 2) Add a transformation strategy advisor
 
 Create:
 
-- `src/core/sourcing/DataSourcingAdvisor.ts`
+- `src/core/transformation/DataTransformationAdvisor.ts`
 
-This component should decide the sourcing shape using the structured guidance.
-
-Suggested output:
+Suggested interface:
 
 ```ts
-export interface DataSourcingDecision {
-  sourceType: "srz_zone" | "curated_zone" | "review_required";
-  readFormat: "view" | "sql" | "sql_script" | "view_script" | "review_required";
-  pathMode: "env_variable" | "literal_path_review_required";
-  chosenRootVariable?: string;
-  chosenEntitySuffix?: string;
-  alias?: string;
+export interface DataTransformationDecision {
+  strategy: "single_sql_module" | "multi_step_temp_view_chain" | "external_include" | "review_required";
   reasons: string[];
   warnings: string[];
+  shouldUseSingleStep: boolean;
+  shouldUseExternalInclude: boolean;
+  shouldUseFilterOption: boolean;
+  shouldUseLocationOrTableOption: boolean;
 }
 ```
 
 Decision rules:
 
-#### Use `srz_zone` when:
-- the user refers to bronze/raw source
-- the request is sourcing from standard raw zone
-- the source path appears to point to raw/bronze landing content
+#### Prefer `single_sql_module` when:
+- the request is simple
+- the business logic is basically:
+  - filter rows
+  - derive one or a few columns
+  - rename/select columns
+  - simple projection
+- one temp view is enough before write/publish
 
-#### Use `curated_zone` when:
-- the request clearly says the source is from curated/silver/gold content
-- the source is already a curated zone object
+#### Prefer `multi_step_temp_view_chain` only when:
+- there are clearly multiple logical intermediate views
+- the request requires staged SQL logic
+- the generated SQL would be materially less readable as one module
+- separate steps are justified by framework guidance
 
-#### If the zone cannot be determined from framework rules:
-- do not guess a new zone token
-- return `review_required`
+#### Prefer `external_include` only when:
+- the transformation SQL is large or reusable
+- the request explicitly implies reusable external SQL/script logic
+- modularity materially improves maintainability
 
-#### Read format rules
-- use `view` when the source is read as a path/table-backed view according to framework pattern
-- use `sql` when the request is naturally a query against an existing object
-- use `sql_script` / `view_script` only when the request or template explicitly requires external SQL/script usage
-- do not default to script-based sourcing unless there is evidence
+#### Return `review_required` when:
+- the transformation intent is ambiguous
+- the docs do not support the inferred structure confidently
+
+Important:
+Do not split a simple bronze-to-silver transform into multiple modules just because multiple verbs appear in the request.
+
+For example:
+- “filter active records, derive order_status, write to silver”
+should usually remain **one logical transform module** unless the user or framework pattern clearly requires otherwise.
 
 ---
 
-### 4) Add a validator for generated sourcing config
+### 3) Add a transformation config validator
 
 Create:
 
-- `src/core/validation/DataSourcingConfigValidator.ts`
+- `src/core/validation/DataTransformationConfigValidator.ts`
 
 Required checks:
 
 #### Must pass
-- `options.module === "data_sourcing_process"`
+- `options.module === "data_transformation"`
 - `options.method === "process"`
-- `sourceList` exists and references defined source keys
-- each source key listed in `sourceList` exists
-- source `type` is one of supported framework types
-- `read-format` is one of supported framework formats
-- interpolated `path` strings are quoted correctly
-- no malformed `${...}` syntax
+- a transformation module has either:
+  - inline `sql`, or
+  - supported `include`
+- `name` exists when required by the framework pattern
+- temp view references are internally consistent
+- option keys are only documented/supported keys
+- `drop.columns` and `masking.columns` follow supported structure when present
+- config is fully resolved before execution
 
 #### Must fail
-- `type: "bronze_zone"` or other invented zone tokens
-- full hardcoded ABFSS path written into job config when a framework env variable should be used
-- mixed malformed strings like broken interpolation + literal path fragments
-- `sourceList` item missing a matching source block
-- path suffix changed incorrectly from what the user/source evidence supplied
+- unsupported transformation module names
+- unsupported method values
+- empty transformation blocks
+- multiple split modules for a simple request when generated by default path without justification
+- invalid include paths
+- malformed SQL placeholders / malformed interpolation
+- unsupported or invented config keys
 
 #### May warn
-- literal path retained because safe env-variable conversion could not be proven
-- curated root variable is not confidently derivable from current framework guidance
-- read format seems plausible but confidence is low
+- multi-step transformation chosen but a single step likely would have been enough
+- external include used for a very small transform
+- location/table/filter options inferred with low confidence
 
 ---
 
-### 5) Integrate into generation flow before rendering
+### 4) Add a transformation SQL planner
 
-Update the creation pipeline so sourcing decisions are made before config rendering.
+Create:
 
-Likely touch files such as:
+- `src/core/transformation/TransformationSqlPlanner.ts`
 
-- `CreateJobSessionService.ts`
-- `BlueprintBuilder.ts`
-- `JobConfigRenderer.ts`
-- existing naming/path utilities if present
+Purpose:
+Turn user intent plus sourcing outputs into the cleanest framework-aligned transformation shape.
 
-Required flow:
+This should decide:
 
-1. parse user request
-2. run `DataSourcingAdvisor`
-3. load framework guidance from `DataSourcingContextProvider`
-4. build sourcing config using framework-supported fields
-5. render path via `InterpolatedPathRenderer`
-6. validate with `DataSourcingConfigValidator`
-7. include sourcing decision details in debug output / response
+- one SQL block vs multiple SQL blocks
+- whether `filter` belongs in `options.filter` vs inline SQL
+- whether an external include file is better than inline SQL
+- temp view naming for chained steps
+- whether masking/drop columns should be emitted
 
----
+Required behavior:
 
-### 6) Required generation behavior for the customer_orders scenario
-
-For a bronze/raw source like customer orders, the generator should prefer something shaped like:
+#### For simple cases like customer_orders:
+Prefer one module shaped roughly like:
 
 ```hocon
-read_source: {
+main_transform: {
+  loggable: true
+  sql: "SELECT ..., CASE ... END AS order_status FROM vw_customer_orders WHERE active_flag = 1"
   options: {
-    module: "data_sourcing_process"
+    module: "data_transformation"
     method: "process"
   }
-  loggable: true
-  sourceList: ["customer_orders"]
-  customer_orders: {
-    type: "srz_zone"
-    read-format: "view"
-    table.name: "customer_orders"
-    path: "${adls.source.root}/customer_orders"
-    alias: "vw_customer_orders"
-  }
+  name: "main_transform"
 }
 ```
 
-Important:
-- do not emit `type: "bronze_zone"`
-- do not emit full ABFSS path in the job config if env-root form is available
-- do not emit the wrong entity suffix such as `customer_order` if the correct suffix is `customer_orders`
-- keep interpolation quoted in whatever exact style the renderer uses consistently across the project
+or the equivalent house-style structure already used in the project.
 
-If the extension outputs JSON-like HOCON, keep that house style consistent, but the path must still be a properly quoted interpolated string.
+Do not split into:
+- one filter module
+- one derive module
+unless there is a documented reason or a user-requested reason.
 
----
-
-### 7) Use the docs as executable guidance, not just UI preview
-
-The markdown docs currently appear to be previewable in the extension.
-That is not enough.
-
-Implement the docs so they actively improve generation behavior.
-
-Required principle:
-- the same docs used for preview/help should also drive generation constraints, validation rules, and examples
-
-If there is already a provider such as `HoconTemplateProvider.ts`, extend/reuse it rather than duplicating logic.
+#### For larger reusable SQL:
+Prefer an external include with a relative path only when the SQL becomes long enough or is clearly reusable.
 
 ---
 
-### 8) UX requirements in chat output
+### 5) Integrate transformation guidance before rendering
 
-When a sourcing config is generated, the response should clearly state:
+Update the create flow so transformation planning happens before final rendering.
 
-- `Sourcing strategy: framework-guided`
-- `Source type selected: srz_zone` or `curated_zone`
-- `Read format selected: view/sql/...`
-- `Path mode: env variable`
-- `Root variable used: ${adls.source.root}` when applicable
-- `Final source path expression: ${adls.source.root}/customer_orders`
+Likely touch files such as:
 
-If the generator could not safely convert a literal path into a variable-based path, say so clearly and mark it for review.
-Do not pretend confidence when the rule set is incomplete.
+- `BlueprintBuilder.ts`
+- `JobConfigRenderer.ts`
+- `CreateJobSessionService.ts`
+- existing response/state files
+- any renderer/validator entry points already added in the sourcing layer
+
+Required flow:
+
+1. parse request
+2. run sourcing decision
+3. run transformation decision
+4. plan SQL/module structure
+5. render transformation config using canonical HOCON style
+6. validate transformation config
+7. include decision details in state and chat response
+
+---
+
+### 6) UX requirements in chat output
+
+Add a transformation block in the response similar to sourcing.
+
+It should clearly say:
+
+- `Transformation strategy: single_sql_module` or equivalent
+- `Reason: simple filter + derive logic; no intermediate temp view needed`
+- `SQL placement: inline` or `external include`
+- `Temp view chaining: yes/no`
+- `Config resolution requirement: must be fully resolved before execution`
+
+For multi-step cases, the response should briefly explain why multiple steps were chosen.
+Do not hide the reason.
+
+---
+
+### 7) Required generation behavior for the customer_orders scenario
+
+For a request like:
+
+- read data from bronze customer_orders
+- filter active records
+- derive order_status
+- write to silver customer_orders_curated
+- publish to Synapse
+
+The transformation layer should prefer:
+
+- **one main transform module**
+- source temp view from sourcing module
+- filter + derive in the same SQL unless the framework docs clearly push otherwise
+- no unnecessary fragment explosion
+- names and references that are consistent with the final write step
+
+That means:
+- do not automatically create separate `transform_filter` and `transform_derive` modules for a simple request
+- do not create intermediate temp views unless justified
+
+---
+
+### 8) Use the docs as executable guidance, not just preview/help
+
+The markdown docs should drive:
+
+- strategy selection
+- field validation
+- splitting rules
+- include vs inline decisions
+- temp-view chaining decisions
+- response explanations
+
+Do not keep these docs as preview-only content.
+
+If there is already a provider pattern from the sourcing layer, reuse the same architecture.
 
 ---
 
@@ -339,58 +366,64 @@ Do not pretend confidence when the rule set is incomplete.
 
 Create or update tests such as:
 
-- `dataSourcingContextProvider.test.ts`
-- `dataSourcingAdvisor.test.ts`
-- `dataSourcingConfigValidator.test.ts`
+- `dataTransformationContextProvider.test.ts`
+- `dataTransformationAdvisor.test.ts`
+- `dataTransformationConfigValidator.test.ts`
+- `transformationSqlPlanner.test.ts`
 - end-to-end create flow tests
 
 #### Required test cases
 
-1. **bronze/raw source maps to SRZ**
-   - input: bronze customer_orders
-   - expect: `type = "srz_zone"`
+1. **simple filter + derive stays single-step**
+   - input: customer_orders style request
+   - expect one transformation module by default
 
-2. **curated source maps to curated_zone**
-   - input clearly says curated source
-   - expect: `type = "curated_zone"`
+2. **multi-step chosen only when justified**
+   - input: clearly staged workflow with intermediate temp views
+   - expect multi-step temp-view chain
 
-3. **job config uses env variable path**
-   - input includes raw source path
-   - expect generated config path uses `${adls.source.root}`
-   - expect no full ABFSS path in job config
+3. **external include chosen only when justified**
+   - input: large reusable SQL
+   - expect include-based transform
 
-4. **quoted interpolation is rendered correctly**
-   - expect valid quoted string containing `${adls.source.root}/customer_orders`
+4. **required options enforced**
+   - `options.module = data_transformation`
+   - `options.method = process`
 
-5. **entity suffix is preserved**
-   - if input indicates `customer_orders`, do not generate `customer_order`
+5. **inline sql accepted**
+   - simple transform with SQL inline passes validation
 
-6. **sourceList matches source blocks**
-   - every sourceList entry resolves to an actual source definition
+6. **include-based transform accepted**
+   - valid relative include path passes validation
 
-7. **invented bronze_zone is rejected**
-   - validator fails on unsupported zone token
+7. **unsupported keys rejected**
+   - invented fields fail validation
 
-8. **malformed path interpolation is rejected**
-   - validator fails on broken mixed interpolation
+8. **empty transform rejected**
+   - no sql and no include should fail
 
-9. **simple native sourcing stays simple**
-   - single logical source should not explode into unnecessary sourcing fragments
+9. **resolved-before-execution behavior enforced**
+   - unresolved placeholders or malformed references fail validation
 
 10. **docs influence output**
-   - changing/reading guidance provider changes selected supported types/read formats accordingly
+   - provider guidance affects advisor/planner decisions
+
+11. **customer_orders end-to-end remains simple**
+   - one sourcing step
+   - one transformation step
+   - one write step
+   - no unnecessary fragmentation
 
 ---
 
 ## Desired code quality
 
-- keep provider/advisor/validator responsibilities separate
-- do not hardcode only the customer_orders case
-- avoid regex-only hacks when structured parsing is possible
-- keep rendering consistent with existing HOCON house style
-- centralize path interpolation logic
-- add debug logs at each decision point
+- keep provider / advisor / planner / validator responsibilities separate
+- centralize decision rules; do not scatter heuristics across renderer code
+- do not hardcode the customer_orders scenario
 - preserve existing working behavior unless it conflicts with framework guidance
+- make reasons/warnings easy to inspect in logs and chat response
+- keep rendering consistent with the project’s HOCON style
 
 ---
 
@@ -398,14 +431,14 @@ Create or update tests such as:
 
 Add non-secret debug logs such as:
 
-- `Data sourcing guidance loaded`
-- `Sourcing decision selected: srz_zone`
-- `Read format selected: view`
-- `Path rendered via env variable root: ${adls.source.root}`
-- `Source suffix preserved: customer_orders`
-- `Data sourcing validation errors: [...]`
+- `Data transformation guidance loaded`
+- `Transformation strategy selected: single_sql_module`
+- `External include selected: false`
+- `Temp view chain required: false`
+- `Transformation validation errors: [...]`
+- `Transformation module count: 1`
 
-Do not log secrets, tokens, or full sensitive storage paths if avoidable.
+Do not log secrets or sensitive SQL beyond what is already acceptable in current diagnostics.
 
 ---
 
@@ -413,15 +446,15 @@ Do not log secrets, tokens, or full sensitive storage paths if avoidable.
 
 Implementation is complete only if all are true:
 
-1. bronze/raw source generation uses `srz_zone`
-2. silver/gold curated source generation uses `curated_zone`
-3. job config uses env-variable-based source paths whenever safely possible
-4. HOCON/JSON-like interpolation is quoted correctly
-5. no silent singular/plural corruption of entity names
-6. `data_sourcing.md` and `hocon_template.txt` materially affect generation logic
-7. validator rejects invented zone names and malformed interpolation
-8. tests cover both positive and negative sourcing cases
-9. existing create flow still works
+1. `data_transformation.md` materially affects generation logic
+2. simple business logic defaults to one transformation module
+3. multi-step chains are only used when justified
+4. external include is only used when justified
+5. required transformation options are enforced
+6. validator rejects unsupported/empty transformation configs
+7. response includes a clear transformation strategy block
+8. tests cover positive and negative cases
+9. end-to-end create flow still works
 
 ---
 
@@ -431,21 +464,21 @@ When finished, respond with:
 
 1. files created
 2. files modified
-3. exact sourcing rules implemented from the docs
+3. exact transformation rules implemented from the docs
 4. tests added/updated
-5. sample before/after output for a bronze/raw source
-6. any remaining ambiguity, especially around curated root variables
+5. sample before/after output for a simple filter + derive request
+6. any remaining ambiguity, especially around when to split into multiple temp-view steps
 
 ---
 
 ## Do not do
 
-- do not hardcode one scenario only
-- do not keep using full ABFSS path in job config if an env variable exists
-- do not invent `bronze_zone`
-- do not silently rewrite `customer_orders` into `customer_order`
-- do not treat preview markdown as documentation-only; it must drive runtime generation behavior
-- do not ask unnecessary follow-up questions if the docs and existing code are enough to implement
+- do not hardcode only the customer_orders scenario
+- do not create multiple transformation modules for a simple request unless justified
+- do not keep docs as preview-only material
+- do not invent unsupported config keys
+- do not move simple inline SQL into external files without a clear reason
+- do not ask unnecessary follow-up questions if the docs and codebase are enough to implement
 
 ---
 
