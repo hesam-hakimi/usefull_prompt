@@ -1,145 +1,161 @@
-# Implement Review / Apply Action Layer for Artifact Reuse Decisions
+# Implement Conversation UX / Orchestration Layer for ETL Artifact Reuse
 
 ## Goal
-Build the next layer after Artifact Discovery / Scoring / Advisor / Patch Planner.
+Build the next layer after:
+- Artifact Discovery
+- Artifact Scoring
+- Artifact Advisor
+- Patch Planning
+- Review / Apply Action Layer
 
-This new layer must turn the planned decisions into actual user-visible actions:
-- review
-- confirm
-- apply
-- validate again
-- then continue to write/deploy only when safe
+This layer must turn the internal decision engine into a clean Copilot Chat workflow.
 
-The current system already has:
-- ArtifactDiscovery
-- ArtifactReuseScorer
-- ArtifactReuseAdvisor
-- ArtifactPatchPlanner
-
-Now add the layer that executes the chosen action safely.
+The user should be able to interact naturally in chat, and the system should guide them through:
+1. discovery
+2. recommendation
+3. review
+4. confirmation
+5. apply
+6. validate
+7. continue
 
 ---
 
-## What this layer must do
+## What this layer must solve
 
-After the advisor returns one of these modes:
-- `reuse_existing_artifacts`
-- `patch_existing_artifacts`
-- `create_new_artifacts`
-- `manual_review_required`
+Right now the core machinery exists, but the UX is still too low-level.
 
-the extension must:
-
-1. render a clear decision summary in chat
-2. show the exact files affected
-3. show patch vs create vs reuse intent
-4. support an explicit user action
-5. apply the selected action safely
-6. rerun validation after apply
-7. block unsafe continuation if validation fails
+We need a conversation orchestration layer that:
+- recognizes reuse-related requests from chat
+- surfaces decision summaries in a user-friendly structure
+- supports explicit user follow-up actions
+- keeps multi-turn session continuity
+- prevents accidental apply without confirmation
+- resumes ETL generation after reuse/apply succeeds
 
 ---
 
 ## New files to create
 
-### `src/core/artifacts/ArtifactActionTypes.ts`
-Add types for:
-- `ArtifactAction`
-- `ArtifactActionMode`
-- `ArtifactActionPreview`
-- `ArtifactApplyResult`
-- `ArtifactValidationAfterApply`
-- `ArtifactReviewItem`
+### `src/chat/ArtifactReuseIntentRouter.ts`
+Detect these user intents from chat:
+- discover existing artifacts
+- recommend reuse
+- preview patch
+- apply patch
+- preview create
+- apply create
+- keep existing only
+- request manual review
+- show readiness
+- continue generation
 
-### `src/core/artifacts/ArtifactActionCoordinator.ts`
-Responsibility:
-- take reuse decision + patch plan + user preference
-- decide which action is available
-- build an action preview
-- invoke the correct downstream applier
+### `src/chat/ArtifactReuseConversationCoordinator.ts`
+Responsibilities:
+- orchestrate the full multi-turn flow
+- read/write session state
+- decide next allowed action
+- route to preview/apply/review/generation
+- block invalid transitions
 
-### `src/core/artifacts/ArtifactPatchApplier.ts`
-Responsibility:
-- apply patch plans to existing files
-- preserve untouched content
-- only modify approved sections
-- support dry-run preview mode first
+### `src/chat/ArtifactReuseResponseBuilder.ts`
+Responsibilities:
+- build compact, user-friendly markdown responses
+- provide structured sections for:
+  - recommendation
+  - review
+  - available actions
+  - apply result
+  - validation result
+  - next step
 
-### `src/core/artifacts/NewArtifactWriter.ts`
-Responsibility:
-- create new files from scaffold plans
-- ensure parent folders exist
-- preserve canonical file naming and include structure
-
-### `src/core/artifacts/ArtifactReviewRenderer.ts`
-Responsibility:
-- format chat-friendly review content
-- include:
-  - chosen mode
-  - confidence
-  - files to reuse
-  - files to patch
-  - files to create
-  - manual review items
-  - validation status
-
-### `src/test/suite/artifactAction.test.ts`
-Tests for action preview, apply flow, validation-after-apply, and blocked unsafe writes.
+### `src/test/suite/artifactReuseConversation.test.ts`
+Conversation-level tests for multi-turn UX and state transitions.
 
 ---
 
 ## Existing files to modify
 
-Update these files:
-- `src/index.ts`
-- `src/core/session/SessionState.ts`
-- `src/core/session/CreateJobResponse.ts`
-- `src/core/session/CreateJobSessionService.ts`
+Update:
 - `src/chat/ETLChatParticipant.ts`
-- `src/core/validation/PreWriteValidationPipeline.ts`
+- `src/core/session/SessionState.ts`
+- `src/core/session/CreateJobSessionService.ts`
+- `src/core/session/CreateJobResponse.ts`
+- `src/index.ts`
 - `src/test/suite/extension.test.ts`
 
 ---
 
-## New action modes
+## Session state additions
 
-Introduce these action modes:
+Add fields to session state for:
+- `artifactReuseDecision`
+- `artifactReviewPreview`
+- `lastArtifactAction`
+- `lastApplyResult`
+- `postApplyValidation`
+- `awaitingUserConfirmation`
+- `allowedNextActions`
+- `resumeGenerationAfterApply`
 
-- `preview_only`
-- `reuse_confirmed`
-- `patch_confirmed`
-- `create_new_confirmed`
-- `manual_review_required`
-- `apply_blocked`
-
-The user should not silently fall into apply mode.
+The system must survive multi-turn conversation without losing context.
 
 ---
 
-## Session flow changes
+## Conversation states
 
-### After artifact reuse decision
-Store in session state:
-- selected candidate
-- decision mode
-- patch plan
-- auto-applicability flag
-- review summary
-- files to touch
+Implement these states:
 
-### Chat behavior
-The user should see a section like:
+- `idle`
+- `reuse_discovered`
+- `review_presented`
+- `awaiting_confirmation`
+- `preview_rendered`
+- `apply_in_progress`
+- `apply_succeeded`
+- `apply_failed`
+- `manual_review_required`
+- `ready_to_continue_generation`
 
-## Artifact Action Review
-- decision: patch_existing_artifacts
+---
+
+## Supported user utterances
+
+The router should understand natural prompts like:
+
+- "can we reuse existing artifacts?"
+- "find a matching env config and job config"
+- "show me what would change"
+- "preview the patch"
+- "apply the patch"
+- "create new files instead"
+- "keep the existing files"
+- "show why this is blocked"
+- "continue with generation"
+- "what do you recommend?"
+- "show readiness"
+
+Do not require exact command syntax.
+
+---
+
+## Chat response structure
+
+### Recommendation response
+Use a format like:
+
+## Recommendation
+- mode: patch_existing_artifacts
 - confidence: high
-- matched artifact set: ...
-- files to reuse: ...
-- files to patch: ...
-- files to create: ...
-- manual review items: ...
+- matched artifact family: ...
+- why this was selected: ...
 
-## Available Actions
+## Files
+- reuse: ...
+- patch: ...
+- create: ...
+
+## Available actions
 - preview patch
 - apply patch
 - create new instead
@@ -148,109 +164,119 @@ The user should see a section like:
 
 ---
 
-## Apply rules
+### Preview response
+Use a format like:
 
-### `reuse_existing_artifacts`
-- do not regenerate files
-- reuse the artifact set
-- rerun validation against the reused artifacts
-- if validation passes, continue
-- if validation fails, downgrade to manual review
+## Patch Preview
+- target files: ...
+- safe auto-apply: yes/no
+- affected sections: ...
 
-### `patch_existing_artifacts`
-- generate patch preview first
-- only apply targeted changes
-- do not overwrite unrelated content
-- rerun validation after patch
-- block continuation if validation fails
+## Before / After
+(show short snippets)
 
-### `create_new_artifacts`
-- create all required files from scaffold plan
-- rerun validation
-- block continuation if validation fails
-
-### `manual_review_required`
-- do not auto-apply
-- render a structured review summary
-- clearly explain why it is unsafe to proceed automatically
+## Available actions
+- apply patch
+- create new instead
+- manual review
 
 ---
 
-## Validation after apply
+### Apply result response
+Use a format like:
 
-After any apply operation:
-1. run existing validation pipeline
-2. run output strategy validation
-3. run env/runtime readiness checks
-4. confirm include refs still resolve
-5. confirm artifact family is still coherent
+## Apply Result
+- mode: patch_confirmed
+- files touched: ...
+- backups created: yes/no
 
-Return:
-- `ok`
-- `warnings`
-- `errors`
-- `filesTouched`
+## Validation After Apply
+- syntax: pass/fail
+- references: pass/fail
+- strategy coherence: pass/fail
+- runtime readiness: pass/fail
 
----
-
-## Safety rules
-
-- Never overwrite unrelated lines or files
-- Never auto-apply when decision mode is manual review
-- Never skip validation-after-apply
-- Never claim success before validation reruns
-- Preserve HOCON/YAML structure exactly
-- Preserve include filenames and doc-driven naming
-- Preserve user-owned SQL unless patch plan explicitly says to update it
+## Next step
+- continue generation
+or
+- manual review required
 
 ---
 
-## Diff / preview behavior
+## UX rules
 
-For patch mode, the preview should include:
-- file path
-- patch type
-- changed sections
-- before/after snippets where practical
-- whether change is safe-auto or needs review
+- Never auto-apply just because a good match exists
+- Always require explicit user confirmation before apply
+- Always show available next actions
+- Always show blocked reason when action is disallowed
+- Always rerun validation after apply
+- If apply succeeds, offer to continue generation immediately
+- If apply fails, preserve session state and explain recovery options
 
-For create-new mode, preview should include:
-- all new files
-- artifact family
-- env config handling
-- include files generated
+---
+
+## Allowed action transitions
+
+Examples:
+
+- `reuse_discovered` -> `review_presented`
+- `review_presented` -> `awaiting_confirmation`
+- `awaiting_confirmation` -> `preview_rendered`
+- `preview_rendered` -> `apply_in_progress`
+- `apply_in_progress` -> `apply_succeeded` or `apply_failed`
+- `apply_succeeded` -> `ready_to_continue_generation`
+
+Disallow invalid jumps such as:
+- applying before preview/review when patch mode requires preview
+- continuing generation when apply failed
+- continuing generation when manual review is still required
+
+---
+
+## Continue-generation integration
+
+After successful reuse/apply:
+- the system must continue with the normal ETL generation flow
+- reused/patched artifacts become the active source of truth
+- chat should say clearly whether generation is:
+  - reusing existing files
+  - patching existing files
+  - creating new files
+
+The final response should include:
+- selected env config mode
+- artifact reuse mode
+- readiness status
+- generated/updated files
 
 ---
 
 ## Tests to add
 
 Add tests for:
-1. reuse mode -> preview + validation succeeds
-2. patch mode -> preview + apply + validation succeeds
-3. create-new mode -> create + validation succeeds
-4. manual review mode blocks apply
-5. validation failure after patch blocks continuation
-6. unrelated file content is preserved
-7. chat response includes action review section
-8. extension end-to-end path supports preview/apply/revalidate flow
-
-Also add one regression test where:
-- an existing artifact family is found
-- patch plan updates only one include file
-- top-level job config remains unchanged
-- final validation still passes
+1. natural-language prompt triggers reuse discovery
+2. recommendation is shown with allowed actions
+3. preview patch updates session state
+4. apply patch requires confirmation
+5. apply create requires confirmation
+6. manual review blocks continue-generation
+7. successful apply unlocks continue-generation
+8. failed apply keeps session recoverable
+9. session state survives multi-turn flow
+10. end-to-end conversation path from "reuse artifacts" to "continue generation"
 
 ---
 
 ## Deliverables
 
 Return:
-1. new files created
-2. existing files modified
-3. action modes implemented
-4. example preview output
-5. example apply output
-6. validation-after-apply result shape
-7. `npm test` result
+1. files created
+2. files modified
+3. conversation states added
+4. supported user utterances
+5. example recommendation response
+6. example preview response
+7. example apply result response
+8. `npm test` result
 
-Do not stop at planning. Implement the layer and run tests.
+Do not stop at planning. Implement the conversation UX layer and run tests.
