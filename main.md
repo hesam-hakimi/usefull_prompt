@@ -1,108 +1,84 @@
-# Fix remaining doc-drift in database_out and tibco_out artifacts
+# Final doc-fidelity verification pass for output strategy
 
-The latest pass is better and all tests pass, but the rendered artifacts are still not fully aligned with the framework docs.
+The implementation is much better and tests are passing, but I want one final pass focused only on fidelity to the framework docs I provided.
 
-Do **not** optimize for keeping the current snapshots if they are wrong.
-Use the framework docs as the source of truth and update implementation + tests together.
+Do not optimize for preserving the current rendered shape if it differs from the framework examples.
+Use the docs as source of truth.
 
-## What is still wrong
+## Re-check these specific items
 
-### 1. database_out paths are too generic
-Current rendered sample uses:
-- `${adls.destination.root}/orders`
-- `${adls.destination.root}/orders_ctrl`
-
-But the framework docs for database out show a dedicated database-dataout path pattern, including run-level structure. Update the planner/config so database out follows the documented path convention instead of generic destination-root shortcuts.
-
-### 2. tibco_out paths are too generic
-Current rendered sample uses destination-root style paths.
-
-But the TIBCO doc shows:
-- TIBCO-specific root
-- separate data/control folders
-- runid/effective-date structure
-- file movement metadata driven by assert.sql.after
-
-Update tibco output rendering to follow the documented path convention exactly.
-
-### 3. assert.sql.after is still oversimplified
-Current output uses simplified insert statements.
-
-That is not enough.
-
-For `database_out`, render the doc-driven metadata generation needed for the next ADLS-to-database step.
-
-For `tibco_out`, render the required pins from the doc, including the exact metadata shape for:
-- pin_file_path
-- pin_file_format
-- pin_mailbox
-- pin_filename
-- pin_container
-- pin_delete_files when applicable / with env fallback
-
-### 4. output names are too generic
-Current names like:
+### 1. Keep module keys aligned with framework examples
+Verify whether the framework expects stable module keys like:
 - `db_data_out`
 - `db_ctrl_out`
 - `tibco_data_out`
 - `tibco_ctrl_out`
 
-need to be checked against the framework docs and made doc-driven where required.
+If yes:
+- keep those as module keys
+- move table-specific naming to the correct doc-driven field such as `name`, rendered view name, output artifact name, or include content
+- do not rename module keys to `orders_db_data_out` / `orders_tibco_data_out` unless the docs explicitly require that
 
-If the docs imply names derived from table/module context, implement that instead of fixed literals.
+### 2. Re-check include file naming against docs
+The framework docs I shared showed examples like:
+- `../sql/database_out.yaml`
+- `../sql/database_ctrl_out.yaml`
+- `../sql/tibco_out.yaml`
+- `../sql/tibco_ctrl_out.yaml`
 
-### 5. validate actual artifact fidelity, not only passing tests
-The current tests may now be validating the wrong rendered shape.
-Update them so they verify the true framework shape from docs.
+Verify whether include refs should stay generic as above.
+If yes, revert include naming to the framework convention and keep doc-driven table specificity elsewhere.
 
-## Required implementation work
+### 3. Re-check database_out root variable
+From the screenshots I shared earlier, the database-out examples appeared to use a path rooted from:
+- `${adls.source.root}` with `/db_dataout/...`
 
-Update the output strategy implementation so the rendered artifacts are doc-driven for:
-- include file names
-- include file paths
-- output paths
-- module names
-- artifact names
-- assert.sql.after templates
-- env fallbacks
+Please verify whether `${adls.dataout.root}` is truly correct.
+If the actual framework example is `${adls.source.root}/db_dataout/...`, update implementation and tests accordingly.
 
-Likely files to inspect/update:
-- `OutputStrategyConfig.ts`
-- `OutputStrategyPlanner.ts`
-- `OutputStrategyContextProvider.ts`
-- `OutputStrategyConfigValidator.ts`
-- `JobConfigRenderer.ts` if needed
-- related tests / golden snapshots
+### 4. Re-check tibco_out root variables
+Verify whether the framework docs truly support:
+- `${tmp.tibco.data.dir}`
+- `${tmp.tibco.ctrl.dir}`
 
-## Required tests
+versus an ADLS-style root convention like the examples I shared earlier.
+If the current variables are only internal abstractions, prove that clearly in code/tests/comments.
+Otherwise align them to the doc examples.
 
-Add or update artifact-level golden tests so they verify:
+### 5. Re-check exact TIBCO assert.sql.after format
+My provided doc showed a required TIBCO assert format with a literal:
+- `'tibco' AS log_type`
 
-### database_out
-- rendered job config matches doc-driven dual-file pattern
-- include refs use `.yaml`
-- data path and control path match the documented convention
-- assert.sql.after contains the required metadata logic
-- include file bodies match the expected SQL shape
+Please verify whether this should remain literal and not conditional.
+If the framework doc requires fixed `'tibco'`, remove:
+- `CASE WHEN '${enable.tibco.out}' = 'true' THEN 'tibco' ELSE 'info' END`
 
-### tibco_out
-- rendered job config matches doc-driven dual-file pattern
-- uses TIBCO root / TIBCO folder convention from docs
-- data/control filenames and paths match docs
-- assert.sql.after contains required pins
-- env fallbacks are applied correctly
+unless there is a separate authoritative source for that behavior.
 
-## Output required from you
+### 6. Re-check database_out view/source naming
+Verify whether:
+- `FROM orders_output_vw`
 
-When done, report back with:
+matches the framework convention.
+If the framework expects the database-out assertion to read from a doc-driven derived view name, render that exact convention instead.
+
+## Required output from you
+
+Report back with:
 
 1. exact files changed
-2. exact before/after rendered artifacts for:
+2. whether each of the 6 items above was:
+   - confirmed correct as implemented
+   - or corrected
+3. full final rendered artifact for:
    - database_out
    - tibco_out
-3. exact assert.sql.after rendered text for both
-4. exact path patterns now used
-5. test results
+4. full final `assert.sql.after` for both
+5. explicit statement of the final conventions for:
+   - module keys
+   - include refs
+   - root variables
+   - output view/name conventions
 
 Do not shorten examples with `...`.
-Show the full rendered artifact samples.
+Show full final rendered artifacts.
