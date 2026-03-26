@@ -1,102 +1,97 @@
-# Implement Existing Artifact Reuse / Update Layer
+# Implement Review / Apply Action Layer for Artifact Reuse Decisions
 
 ## Goal
-Add a new layer that decides whether the extension should:
-- reuse an existing job artifact set,
-- patch an existing artifact set,
-- or create a new one.
+Build the next layer after Artifact Discovery / Scoring / Advisor / Patch Planner.
 
-This must work after:
-- intent extraction
-- output strategy selection
-- env config discovery/reuse
-- env patch planning
+This new layer must turn the planned decisions into actual user-visible actions:
+- review
+- confirm
+- apply
+- validate again
+- then continue to write/deploy only when safe
 
-The new layer must minimize unnecessary regeneration and preserve existing valid artifacts whenever safe.
+The current system already has:
+- ArtifactDiscovery
+- ArtifactReuseScorer
+- ArtifactReuseAdvisor
+- ArtifactPatchPlanner
+
+Now add the layer that executes the chosen action safely.
 
 ---
 
-## What this layer should do
+## What this layer must do
 
-For a new ETL request, the extension should search the workspace for existing artifacts and classify the situation into one of these modes:
-
+After the advisor returns one of these modes:
 - `reuse_existing_artifacts`
 - `patch_existing_artifacts`
 - `create_new_artifacts`
 - `manual_review_required`
 
-This layer must inspect:
-- existing top-level job config files
-- existing include files
-- existing env config references / selected env config
-- module structure
-- output strategy compatibility
-- naming compatibility
-- path compatibility
-- doc-driven output strategy expectations
+the extension must:
+
+1. render a clear decision summary in chat
+2. show the exact files affected
+3. show patch vs create vs reuse intent
+4. support an explicit user action
+5. apply the selected action safely
+6. rerun validation after apply
+7. block unsafe continuation if validation fails
 
 ---
 
 ## New files to create
 
-### `src/core/artifacts/ArtifactReuseTypes.ts`
+### `src/core/artifacts/ArtifactActionTypes.ts`
 Add types for:
-- `ArtifactCandidate`
-- `ArtifactReuseDecision`
-- `ArtifactPatchPlan`
-- `ArtifactPatchItem`
-- `ArtifactReuseInput`
+- `ArtifactAction`
+- `ArtifactActionMode`
+- `ArtifactActionPreview`
+- `ArtifactApplyResult`
+- `ArtifactValidationAfterApply`
+- `ArtifactReviewItem`
 
-### `src/core/artifacts/ArtifactDiscovery.ts`
+### `src/core/artifacts/ArtifactActionCoordinator.ts`
 Responsibility:
-- search workspace for candidate job configs and related include files
-- detect artifact family/group
-- collect related files
-- detect module names, include refs, output strategy, env assumptions
+- take reuse decision + patch plan + user preference
+- decide which action is available
+- build an action preview
+- invoke the correct downstream applier
 
-### `src/core/artifacts/ArtifactReuseScorer.ts`
+### `src/core/artifacts/ArtifactPatchApplier.ts`
 Responsibility:
-- score candidates against the current request
-- compare:
-  - source intent
-  - transformation shape
-  - output strategy
-  - env compatibility
-  - naming similarity
-  - doc-driven required structure
-- return ranked candidates
+- apply patch plans to existing files
+- preserve untouched content
+- only modify approved sections
+- support dry-run preview mode first
 
-### `src/core/artifacts/ArtifactReuseAdvisor.ts`
+### `src/core/artifacts/NewArtifactWriter.ts`
 Responsibility:
-- choose one of:
-  - `reuse_existing_artifacts`
-  - `patch_existing_artifacts`
-  - `create_new_artifacts`
-  - `manual_review_required`
-- explain why
-- produce a chat-friendly summary
+- create new files from scaffold plans
+- ensure parent folders exist
+- preserve canonical file naming and include structure
 
-### `src/core/artifacts/ArtifactPatchPlanner.ts`
+### `src/core/artifacts/ArtifactReviewRenderer.ts`
 Responsibility:
-- create a minimal patch plan for:
-  - top-level job config
-  - include files
-  - output strategy sections
-  - env references
-- keep valid existing sections unchanged whenever possible
+- format chat-friendly review content
+- include:
+  - chosen mode
+  - confidence
+  - files to reuse
+  - files to patch
+  - files to create
+  - manual review items
+  - validation status
 
-### `src/test/suite/artifactReuse.test.ts`
-Add new tests for discovery, scoring, reuse decisions, and patch plan creation.
+### `src/test/suite/artifactAction.test.ts`
+Tests for action preview, apply flow, validation-after-apply, and blocked unsafe writes.
 
 ---
 
 ## Existing files to modify
 
-Update these files so the new layer is part of the main flow:
-
+Update these files:
 - `src/index.ts`
-- `src/core/intent/IntentExtractor.ts`
-- `src/core/blueprint/BlueprintBuilder.ts`
 - `src/core/session/SessionState.ts`
 - `src/core/session/CreateJobResponse.ts`
 - `src/core/session/CreateJobSessionService.ts`
@@ -106,136 +101,156 @@ Update these files so the new layer is part of the main flow:
 
 ---
 
-## Decision logic
+## New action modes
 
-### Choose `reuse_existing_artifacts` when:
-- a candidate matches strongly on source, transformation intent, output strategy, and env compatibility
-- no required structure is missing
-- no doc-driven mismatch exists
+Introduce these action modes:
 
-### Choose `patch_existing_artifacts` when:
-- a close candidate exists
-- only a few fields or files need updates
-- patching is safer than full regeneration
+- `preview_only`
+- `reuse_confirmed`
+- `patch_confirmed`
+- `create_new_confirmed`
+- `manual_review_required`
+- `apply_blocked`
 
-### Choose `create_new_artifacts` when:
-- no strong candidate exists
-- matching candidates are too far apart
-- patching would be more disruptive than new generation
-
-### Choose `manual_review_required` when:
-- multiple strong candidates conflict
-- patching would affect too many files
-- key doc-driven structures are incompatible
-- env/output/runtime requirements are too far apart
+The user should not silently fall into apply mode.
 
 ---
 
-## Scoring factors
+## Session flow changes
 
-Score candidates using:
-- source match
-- transformation shape match
-- output strategy match
-- required runtime/env compatibility
-- include file compatibility
-- naming compatibility
-- doc-driven module compliance
-- artifact family consistency
+### After artifact reuse decision
+Store in session state:
+- selected candidate
+- decision mode
+- patch plan
+- auto-applicability flag
+- review summary
+- files to touch
 
-Penalize:
-- conflicting output strategies
-- missing required include structure
-- invalid doc-driven naming
-- unrelated source/table family
-- too many required file changes
+### Chat behavior
+The user should see a section like:
 
----
+## Artifact Action Review
+- decision: patch_existing_artifacts
+- confidence: high
+- matched artifact set: ...
+- files to reuse: ...
+- files to patch: ...
+- files to create: ...
+- manual review items: ...
 
-## Patch planning rules
-
-When patching:
-- preserve existing valid module keys
-- preserve valid include refs
-- preserve valid output strategy sections
-- only update fields that must change
-- do not rewrite whole files if a targeted patch is enough
-
-The patch plan should clearly separate:
-- `safe_updates`
-- `new_files_needed`
-- `manual_review_items`
+## Available Actions
+- preview patch
+- apply patch
+- create new instead
+- keep existing only
+- manual review
 
 ---
 
-## Chat UX requirements
+## Apply rules
 
-Add a new response section:
+### `reuse_existing_artifacts`
+- do not regenerate files
+- reuse the artifact set
+- rerun validation against the reused artifacts
+- if validation passes, continue
+- if validation fails, downgrade to manual review
 
-### Artifact Reuse Decision
-- mode
-- confidence
-- matched candidate
-- reasons
-- files to reuse
-- files to patch
-- files to create
-- manual review items
+### `patch_existing_artifacts`
+- generate patch preview first
+- only apply targeted changes
+- do not overwrite unrelated content
+- rerun validation after patch
+- block continuation if validation fails
 
-If patching is selected, show a concise diff-style summary.
+### `create_new_artifacts`
+- create all required files from scaffold plan
+- rerun validation
+- block continuation if validation fails
+
+### `manual_review_required`
+- do not auto-apply
+- render a structured review summary
+- clearly explain why it is unsafe to proceed automatically
 
 ---
 
-## Validation rules
+## Validation after apply
 
-Before write/deploy:
-- validate patched artifacts with the same existing validation pipeline
-- ensure reused files still satisfy doc-driven rules
-- ensure output strategy still matches
-- ensure env requirements remain satisfied
-- block write if the patch plan creates invalid artifact combinations
+After any apply operation:
+1. run existing validation pipeline
+2. run output strategy validation
+3. run env/runtime readiness checks
+4. confirm include refs still resolve
+5. confirm artifact family is still coherent
+
+Return:
+- `ok`
+- `warnings`
+- `errors`
+- `filesTouched`
+
+---
+
+## Safety rules
+
+- Never overwrite unrelated lines or files
+- Never auto-apply when decision mode is manual review
+- Never skip validation-after-apply
+- Never claim success before validation reruns
+- Preserve HOCON/YAML structure exactly
+- Preserve include filenames and doc-driven naming
+- Preserve user-owned SQL unless patch plan explicitly says to update it
+
+---
+
+## Diff / preview behavior
+
+For patch mode, the preview should include:
+- file path
+- patch type
+- changed sections
+- before/after snippets where practical
+- whether change is safe-auto or needs review
+
+For create-new mode, preview should include:
+- all new files
+- artifact family
+- env config handling
+- include files generated
 
 ---
 
 ## Tests to add
 
 Add tests for:
-1. strong candidate => reuse
-2. close candidate => patch
-3. no candidate => create new
-4. conflicting candidates => manual review
-5. patch plan only updates minimal fields
-6. output strategy mismatch prevents reuse
-7. env mismatch prevents unsafe reuse
-8. include structure mismatch triggers patch or review
-9. final response includes reuse decision section
+1. reuse mode -> preview + validation succeeds
+2. patch mode -> preview + apply + validation succeeds
+3. create-new mode -> create + validation succeeds
+4. manual review mode blocks apply
+5. validation failure after patch blocks continuation
+6. unrelated file content is preserved
+7. chat response includes action review section
+8. extension end-to-end path supports preview/apply/revalidate flow
 
-Also add end-to-end tests for:
-- existing customer_orders job gets patched, not rebuilt
-- existing tibco/dataout config family gets reused correctly
-- existing curated load/enrich family stays stable
-
----
-
-## Important constraints
-
-- Do not regress env config discovery/reuse logic
-- Do not regress output strategy logic
-- Do not replace valid existing artifacts unnecessarily
-- Do not auto-apply placeholder suggestions as final values
-- Keep changes deterministic and testable
+Also add one regression test where:
+- an existing artifact family is found
+- patch plan updates only one include file
+- top-level job config remains unchanged
+- final validation still passes
 
 ---
 
 ## Deliverables
 
 Return:
-1. files created
-2. files modified
-3. reuse decision rules
-4. patch planning rules
-5. tests added
-6. `npm test` result
-7. a sample before/after reuse decision summary
+1. new files created
+2. existing files modified
+3. action modes implemented
+4. example preview output
+5. example apply output
+6. validation-after-apply result shape
+7. `npm test` result
 
-Do not stop after partial implementation.
+Do not stop at planning. Implement the layer and run tests.
