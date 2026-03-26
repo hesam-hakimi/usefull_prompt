@@ -1,74 +1,44 @@
-# Next implementation step: Env Config Discovery and Reuse Layer
+# Next implementation step: Env Config Patch Plan + Reuse Action Layer
 
-The runtime readiness layer is complete and passing tests.
-Now build the next layer: automatic env-config discovery, scoring, reuse recommendation, and gap reporting.
+The Env Config Discovery and Reuse Layer is complete and passing tests.
+Now implement the next layer: convert env discovery decisions into actionable patch/scaffold output.
 
 ## Goal
 
-When a job is generated, the extension should not only report required env vars/secrets/pipelines, but should also:
+After env discovery/scoring decides `reuse_existing`, `review_required`, or `create_new`, the system must also generate a concrete env action plan:
 
-- discover existing env config files in the workspace
-- evaluate which env config best satisfies the generated job
-- recommend reuse vs create-new
-- explain missing items clearly
-- surface the decision in chat and session state
+- what keys are missing
+- why they are needed
+- what values can be safely suggested
+- whether to patch an existing env config or create a new one
+- a minimal patch/scaffold artifact the user can review
 
-This should improve UX by minimizing unnecessary env-config creation.
+This should improve UX by turning recommendation into action.
 
 ---
 
 ## Functional requirements
 
-### 1. Discover env config candidates
-Search the workspace for env config files using the repo’s existing conventions.
+### 1. Add structured env gap model
 
-Examples may include:
-- `conf/env/*.yml`
-- `conf/env/*.yaml`
-- other repo-supported env-config paths if already present
+Create types for missing items and patch/scaffold plans.
 
-Do not invent unsupported search locations if the repo already has a convention.
-
-Create a small discovery utility that returns candidate env config files.
-
----
-
-### 2. Parse env config content safely
-Read env config candidates and extract only the fields needed for matching/scoring.
-
-At minimum, support matching on values relevant to current strategies, such as:
-- `adls.source.root`
-- `adls.destination.root`
-- `adls.tibco.root`
-- `destination.malcode`
-- mail / tibco-related env values
-- db / connection-related values
-- any other fields already recognized by runtime readiness
-
-If the repo already has a parser/helper for HOCON/YAML/env-style files, reuse it.
-
----
-
-### 3. Build Env Config scoring
-Create an advisor that compares runtime-readiness requirements against discovered env configs.
-
-Suggested output shape:
+Suggested shape:
 
 ```ts
-type EnvConfigMatch = {
-  path: string;
-  score: number;
-  confidence: 'high' | 'medium' | 'low';
-  satisfied: string[];
-  missing: string[];
-  warnings: string[];
+type EnvMissingItem = {
+  key: string;
+  reason: string;
+  required: boolean;
+  suggestedValue?: string;
+  source: 'runtime_readiness' | 'output_strategy' | 'doc_rule';
 };
 
-type EnvConfigDecision = {
-  mode: 'reuse_existing' | 'create_new' | 'review_required';
-  selectedPath?: string;
-  candidates: EnvConfigMatch[];
-  reasons: string[];
-  missingRequirements: string[];
+type EnvPatchPlan = {
+  mode: 'patch_existing' | 'create_new' | 'manual_review';
+  targetPath?: string;
+  missing: EnvMissingItem[];
+  patchText?: string;
+  scaffoldText?: string;
   warnings: string[];
 };
