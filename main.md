@@ -1,51 +1,74 @@
-# Next implementation step: Runtime Readiness Layer
+# Next implementation step: Env Config Discovery and Reuse Layer
 
-The output strategy layer now looks stable enough.
-Do not rework naming or path conventions unless required by this task.
-
-Build the next layer focused on runtime readiness for generated ETL artifacts.
+The runtime readiness layer is complete and passing tests.
+Now build the next layer: automatic env-config discovery, scoring, reuse recommendation, and gap reporting.
 
 ## Goal
 
-After a job is generated, the extension must also tell the user whether the artifact is operationally ready to run.
+When a job is generated, the extension should not only report required env vars/secrets/pipelines, but should also:
 
-This means detecting:
-- missing env variables
-- missing secret/connection requirements
-- missing required assertion metadata
-- unresolved placeholders
-- output-strategy-specific runtime prerequisites
+- discover existing env config files in the workspace
+- evaluate which env config best satisfies the generated job
+- recommend reuse vs create-new
+- explain missing items clearly
+- surface the decision in chat and session state
 
-The result should be visible in chat and testable.
+This should improve UX by minimizing unnecessary env-config creation.
 
 ---
 
-## What to build
+## Functional requirements
 
-### 1. Add a Runtime Readiness evaluator
-Create a small layer that runs after output strategy / rendering and before final response assembly.
+### 1. Discover env config candidates
+Search the workspace for env config files using the repo’s existing conventions.
 
-It should inspect the generated artifact set and produce a structured result like:
+Examples may include:
+- `conf/env/*.yml`
+- `conf/env/*.yaml`
+- other repo-supported env-config paths if already present
+
+Do not invent unsupported search locations if the repo already has a convention.
+
+Create a small discovery utility that returns candidate env config files.
+
+---
+
+### 2. Parse env config content safely
+Read env config candidates and extract only the fields needed for matching/scoring.
+
+At minimum, support matching on values relevant to current strategies, such as:
+- `adls.source.root`
+- `adls.destination.root`
+- `adls.tibco.root`
+- `destination.malcode`
+- mail / tibco-related env values
+- db / connection-related values
+- any other fields already recognized by runtime readiness
+
+If the repo already has a parser/helper for HOCON/YAML/env-style files, reuse it.
+
+---
+
+### 3. Build Env Config scoring
+Create an advisor that compares runtime-readiness requirements against discovered env configs.
+
+Suggested output shape:
 
 ```ts
-type RuntimeReadinessReport = {
-  isReady: boolean;
-  severity: 'ok' | 'warning' | 'error';
-  strategy: string;
-  requiredEnvVars: string[];
-  requiredSecrets: string[];
-  requiredConnections: string[];
-  requiredPipelines: string[];
-  missingItems: Array<{
-    type: 'env' | 'secret' | 'connection' | 'assertion' | 'include' | 'placeholder' | 'other';
-    key: string;
-    reason: string;
-    moduleKey?: string;
-  }>;
-  warnings: Array<{
-    key: string;
-    reason: string;
-    moduleKey?: string;
-  }>;
-  notes: string[];
+type EnvConfigMatch = {
+  path: string;
+  score: number;
+  confidence: 'high' | 'medium' | 'low';
+  satisfied: string[];
+  missing: string[];
+  warnings: string[];
+};
+
+type EnvConfigDecision = {
+  mode: 'reuse_existing' | 'create_new' | 'review_required';
+  selectedPath?: string;
+  candidates: EnvConfigMatch[];
+  reasons: string[];
+  missingRequirements: string[];
+  warnings: string[];
 };
