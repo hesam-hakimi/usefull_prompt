@@ -1,7 +1,13 @@
-# Fix the ETL extension so write actually happens for the customer_orders scenario
+# Next step: apply the customer_orders write fix and verify real file creation
 
-## Task
-Patch the implementation so this scenario passes end-to-end and files are written:
+Implement the fix from `fix_etl_extension_customer_orders.md`.
+
+## Execute in this order
+
+1. Patch the code for the alias/path/output validation issues.
+2. Run all tests.
+3. Launch the extension host again.
+4. Re-run the same scenario:
 
 - read bronze `customer_orders`
 - filter active records
@@ -9,100 +15,38 @@ Patch the implementation so this scenario passes end-to-end and files are writte
 - write curated output
 - prepare Synapse publish flow
 
-## Current failure
-Write is blocked by validation. Main blocker:
+## Required verification
 
-- sourced view alias `vw_customer_order` was not found in generated/include SQL
+### A. Validation
+Confirm these are no longer blocking:
+- sourced alias mismatch
+- `customer_order` vs `customer_orders`
+- invalid curated load/enrich zone rendering
 
-Related issues seen in output:
-- source table is `customer_orders` but generated path leaf becomes `customer_order`
-- source alias becomes `vw_customer_order`
-- `curated_load_enrich` flow still renders non-curated zone `silver`
-- reused env config missing external include should stay warning-only, not hard block
+### B. Generated artifact correctness
+Show the exact generated job config and confirm:
+- source path leaf is `customer_orders`
+- source alias is `vw_customer_orders`
+- transform SQL reads from `vw_customer_orders`
+- curated output uses framework-valid `curated_load_enrich` rendering
 
-## Required fixes
+### C. Real write result
+Prove files were actually created on disk by showing:
+- written file paths
+- file names
+- whether overwrite or create happened
+- file contents or representative excerpts
 
-### 1. Preserve source naming exactly
-Do not singularize `customer_orders`.
-
-Expected:
-- path leaf: `customer_orders`
-- source alias: `vw_customer_orders`
-
-Not:
-- `customer_order`
-- `vw_customer_order`
-
-### 2. Make transform SQL consume the exact sourced alias
-If the sourced alias is `vw_customer_orders`, generated transform SQL or generated include content must read from:
-
-```sql
-FROM vw_customer_orders
-```
-
-### 3. Fix curated load/enrich rendering
-When output strategy is `curated_load_enrich`, render framework-valid curated/enrich config.
-Do not emit non-curated `silver` token if validator rejects it for `load_enrich_process`.
-
-### 4. Write gate behavior
-Only hard validation errors should block write.
-Warnings must not block file creation.
-
-Keep these as warnings unless explicitly fatal:
-- missing external include from reused env config
-- Synapse out-of-pilot warnings
-- human review required notes
-- merge caution warnings
-
-## Files to inspect
-Patch the real implementation, especially logic around:
-- source alias/path derivation
-- transform/include SQL generation
-- output strategy planning/rendering
-- pre-write validation
-- write/apply flow
-
-Likely files include:
-- `BlueprintBuilder.ts`
-- `JobConfigRenderer.ts`
-- sourcing helpers
-- transformation helpers
-- output strategy planner / validator
-- pre-write validation pipeline
-- write/apply coordinator
+### D. Regression
+After customer_orders passes, run these regression checks:
+1. generic dataframe writer flow
+2. database_out flow
+3. tibco_out flow
+4. reused env config flow with warnings only
 
 ## Acceptance criteria
-
-### For this scenario
-Input intent:
-- bronze `customer_orders`
-- active filter
-- derive `order_status`
-- curated write
-- Synapse publish
-
-### Expected output
-- source path uses `customer_orders`
-- source alias is `vw_customer_orders`
-- transform SQL references `vw_customer_orders`
-- output strategy `curated_load_enrich` passes validator
-- no blocking alias error
-- write is allowed if only warnings remain
-- files are actually written to disk
-
-## Tests to add/update
-Add/update tests for:
-
-1. plural source table names are preserved
-2. generated source alias matches generated transform SQL
-3. `curated_load_enrich` renders validator-accepted config
-4. warnings do not block write
-5. end-to-end `customer_orders` scenario writes files successfully
-
-## Deliverables
-After patching, report back with:
-- root cause
-- files changed
-- exact fix applied
-- before/after snippet
-- full test results
+- extension writes files successfully
+- warnings do not block write
+- only true validation errors block write
+- no regression in existing passing tests
+- report exact root cause, files changed, and before/after output
