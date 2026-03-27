@@ -1,52 +1,46 @@
-# Next step: apply the customer_orders write fix and verify real file creation
+# Next Step: Extract and Verify Full Synapse Publish Output
 
-Implement the fix from `fix_etl_extension_customer_orders.md`.
+The `customer_orders` write fix is now passing and artifacts are being written successfully.
 
-## Execute in this order
+## Goal
+Extract the full generated artifacts for the same `customer_orders -> Synapse` scenario and verify the output is correct end to end.
 
-1. Patch the code for the alias/path/output validation issues.
-2. Run all tests.
-3. Launch the extension host again.
-4. Re-run the same scenario:
+## Please do the following
 
-- read bronze `customer_orders`
-- filter active records
-- derive `order_status`
-- write curated output
-- prepare Synapse publish flow
+1. From the same latest temp run, extract the complete generated artifacts for:
+   - main job config
+   - transform include file(s)
+   - curated/load_enrich or data_sync related module(s)
+   - any Synapse publish-related config generated for this flow
 
-## Required verification
+2. Show the exact rendered content or representative excerpts for each generated artifact.
 
-### A. Validation
-Confirm these are no longer blocking:
-- sourced alias mismatch
-- `customer_order` vs `customer_orders`
-- invalid curated load/enrich zone rendering
+3. Verify these points explicitly:
+   - source table remains `customer_orders`
+   - source alias remains `vw_customer_orders`
+   - transform SQL consumes `vw_customer_orders`
+   - output strategy is `curated_load_enrich`
+   - curated zone rendering is framework-valid
+   - Synapse publish section/module is present when requested
+   - no invalid zone names or alias mismatches remain
+   - include refs are valid and resolvable
 
-### B. Generated artifact correctness
-Show the exact generated job config and confirm:
-- source path leaf is `customer_orders`
-- source alias is `vw_customer_orders`
-- transform SQL reads from `vw_customer_orders`
-- curated output uses framework-valid `curated_load_enrich` rendering
+4. Confirm whether the generated files are:
+   - only in temp repo for preview/testing
+   - or also written into the actual selected workspace location
 
-### C. Real write result
-Prove files were actually created on disk by showing:
-- written file paths
-- file names
-- whether overwrite or create happened
-- file contents or representative excerpts
+5. If they are still temp-only, explain exactly which code path prevents writing to the real workspace and what should be changed.
 
-### D. Regression
-After customer_orders passes, run these regression checks:
-1. generic dataframe writer flow
-2. database_out flow
-3. tibco_out flow
-4. reused env config flow with warnings only
+6. Add one golden acceptance test for this exact scenario that asserts:
+   - file creation happens
+   - job config shape is correct
+   - source alias/path are correct
+   - Synapse-related output is present when requested
 
-## Acceptance criteria
-- extension writes files successfully
-- warnings do not block write
-- only true validation errors block write
-- no regression in existing passing tests
-- report exact root cause, files changed, and before/after output
+## Deliverable
+Provide:
+- files generated
+- exact paths
+- verification checklist with pass/fail
+- remaining gaps, if any
+- exact files changed
