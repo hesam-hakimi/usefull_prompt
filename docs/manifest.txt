@@ -1,0 +1,10 @@
+01-project-architecture.md
+02-implementation-progress-and-status.md
+03-framework-rules-and-artifact-conventions.md
+04-extension-code-map-and-runtime-flow.md
+05-testing-validation-and-known-issues.md
+06-prompting-playbook-and-next-steps.md
+07-review-and-gap-notes.md
+08-quick-reference-cheatsheet.md
+README.md
+manifest.txt
