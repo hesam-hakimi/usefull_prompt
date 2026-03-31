@@ -1,169 +1,121 @@
-# Next Step: Real Workspace Write Validation + Fix Pass
+You can proceed with Phase 1 without waiting for more answers, but here is the best guidance I have from the reference pack.
 
-We have already verified artifact generation in the temp test repo and added acceptance coverage for the `customer_orders -> Synapse` scenario.
+## 1) Write Command Handler
+**Best answer:** it is **most likely triggered through VS Code chat command handling**, centered around `ETLChatParticipant.ts`, not just a standalone file writer.
 
-Now move to the next phase: validate and fix the **real workspace write flow** in the Extension Development Host.
+Why I say that:
+- the runtime flow notes say the user request enters through chat, likely through `ETLChatParticipant.ts`
+- that same note says `@etl /write` is expected to retrieve session artifacts, resolve workspace path, and write files
+- the important names explicitly called out for debugging are `RepoWriter.getWorkspacePath()`, `handleWriteCommand`, and `ETLChatParticipant.ts`  [oai_citation:0‡04-extension-code-map-and-runtime-flow.md](sediment://file_00000000196871fda8fb620a878d64f1)
 
-## Goal
+**What I do not know:** I do **not** know whether there is also a separate command registration in `package.json`.  
+So the practical instruction is:
 
-Prove that `@etl /create` followed by `@etl /write` writes the generated ETL artifacts into the **actual selected workspace folder**, not only into temp test locations, and fix any issues found.
+- inspect `ETLChatParticipant.ts` first
+- search for `handleWriteCommand`
+- then check `package.json` for any related command registration
 
-## Scope
+## 2) Test Fixtures / Smoke Scenarios
+**Best answer:** the scenarios are already recognized in the plan/reference pack, and there is evidence that `customer_orders -> curated + Synapse` has acceptance coverage, but I do **not** know whether there are already dedicated fixture files in a specific fixtures folder.
 
-Focus on this exact scenario:
+What is supported:
+- the plan/reference pack explicitly says the system needs manual smoke scenarios including:
+  - curated load/enrich
+  - curated + Synapse publish
+  - database_out
+  - tibco_out
+  - env reuse
+  - artifact reuse  [oai_citation:1‡02-implementation-progress-and-status.md](sediment://file_00000000f2e871fd811c16ad9784c693)
+- the implementation status says the `customer_orders -> Synapse` scenario was a major reference flow and that acceptance coverage was added for Synapse publish presence  [oai_citation:2‡02-implementation-progress-and-status.md](sediment://file_00000000f2e871fd811c16ad9784c693)
+- the code map lists `extension.test.ts`, `artifactFidelity.test.ts`, and other strategy tests as likely existing test locations  [oai_citation:3‡04-extension-code-map-and-runtime-flow.md](sediment://file_00000000196871fda8fb620a878d64f1)
 
-- source: `customer_orders`
-- transform: filter active records + derive `order_status`
-- output: curated load/enrich
-- publish target: Synapse
-- env config: reuse existing
-- include style: keep framework-valid behavior already implemented
+**What I do not know:** whether those scenarios already exist as reusable fixture files under something like `src/test/fixtures`.
 
-## What to do
+So the practical instruction is:
 
-### 1. Execute the real extension flow in the Extension Development Host
+- inspect `extension.test.ts` first
+- inspect any existing `src/test/` helper/fixture structure
+- if there is no reusable fixture layer, create it as part of implementation
 
-Use the real chat flow, not the temp test harness:
+## 3) Workspace Root Resolution
+**Best answer:** there is **likely a specific utility/service path for this**, not just random inline logic everywhere.
 
-1. Run `@etl /create` for the `customer_orders -> Synapse` scenario.
-2. Then run `@etl /write`.
-3. Confirm whether files are created in the actual workspace folder selected by the extension.
+Why:
+- the runtime flow notes explicitly say production write path must rely on the real workspace resolution method
+- the important names called out are `RepoWriter.getWorkspacePath()`, `handleWriteCommand`, and `ETLChatParticipant.ts`  [oai_citation:4‡04-extension-code-map-and-runtime-flow.md](sediment://file_00000000196871fda8fb620a878d64f1)
 
-### 2. Trace the real write path
+So the practical assumption should be:
 
-Inspect and document the real code path used during write, including at minimum:
+- start with `RepoWriter.ts`
+- find `getWorkspacePath()`
+- trace who calls it during `@etl /write`
 
-- command handler that receives `@etl /write`
-- session/artifact state used for the write
-- workspace path resolution
-- file write orchestration
-- overwrite/create behavior
-- include file write behavior
-- env config handling during write
+That said, I do **not** know whether some workspace-root logic is also duplicated elsewhere, so still search the repo for:
+- `getWorkspacePath`
+- `workspaceFolders`
+- `rootPath`
+- `fsPath`
 
-Show the exact methods/classes involved.
+## 4) Include File Write Logic
+**Best answer:** I would treat this as **distributed across multiple files until proven otherwise**.
 
-### 3. Verify real written artifacts
+Why:
+- the architecture pack separates:
+  - planning
+  - rendering
+  - pre-write validation
+  - repo/file writing  [oai_citation:5‡04-extension-code-map-and-runtime-flow.md](sediment://file_00000000196871fda8fb620a878d64f1)
+- the code map explicitly lists both:
+  - `RepoWriter`-style write flow references
+  - `NewArtifactWriter.ts`
+  - `ArtifactActionCoordinator.ts` in the action/apply layer  [oai_citation:6‡04-extension-code-map-and-runtime-flow.md](sediment://file_00000000196871fda8fb620a878d64f1)
+- the real write checklist explicitly says one of the things to trace is whether include files are written together with the main job config  [oai_citation:7‡04-extension-code-map-and-runtime-flow.md](sediment://file_00000000196871fda8fb620a878d64f1)
 
-Confirm the actual workspace receives the expected files for this scenario:
+So my practical guidance is:
 
-- main job config
-- transform include file
-- any Synapse-related output module/config produced for this scenario
+- assume `RepoWriter.ts` is central for actual persistence/path resolution
+- assume `NewArtifactWriter.ts` may participate in creation/apply flows
+- verify whether include enumeration happens in renderer/planner code and whether actual persistence happens in writer code
 
-For each file, provide:
+**I do not know** which one is the single source of truth until the repo is inspected.
 
-- exact full path
-- whether created or overwritten
-- short excerpt of actual written content
+## 5) Synapse Publish Artifacts
+**Best answer:** this looks like it is **embedded as a section/module inside the main job config**, not a separate standalone artifact type.
 
-### 4. Compare preview vs real write
+Why:
+- the implementation status says when Synapse publishing is requested, “the generated flow contains the publish section/module” and that `data_sync` is present where expected  [oai_citation:8‡02-implementation-progress-and-status.md](sediment://file_00000000f2e871fd811c16ad9784c693)
+- the framework conventions doc describes generated artifacts as:
+  - main job config
+  - include SQL/YAML files
+  and shows module-based HOCON structures inside the job config  [oai_citation:9‡03-framework-rules-and-artifact-conventions.md](sediment://file_00000000b07071f8bdd1dbd25cd70529)
+- the artifact structure example lists job config plus include files like `main_transform.json`, `database_out.yaml`, `tibco_out.yaml`; it does **not** describe Synapse publish as a separate dedicated file artifact type  [oai_citation:10‡03-framework-rules-and-artifact-conventions.md](sediment://file_00000000b07071f8bdd1dbd25cd70529)
 
-Verify that the files written to the real workspace match the generated preview/output already validated in tests.
+So the working assumption should be:
 
-Explicitly check:
+- Synapse publish is likely a **module/section in the generated job config**
+- not a separate file type
+- but it may depend on existing include files already used by the main flow
 
-- source table remains `customer_orders`
-- source alias remains `vw_customer_orders`
-- transform SQL reads from `vw_customer_orders`
-- output strategy remains `curated_load_enrich`
-- curated zone rendering remains framework-valid
-- Synapse publish module/section exists when requested
-- include refs are written and resolvable
-- no temp-repo-only assumptions leak into production write path
+## Bottom line
+You do **not** need to stop for these answers.
 
-### 5. Fix any real-write issues found
+Proceed with Phase 1 and treat these as discovery targets:
+1. trace `@etl /create` and `@etl /write` through `ETLChatParticipant.ts`
+2. trace `handleWriteCommand`
+3. trace `RepoWriter.getWorkspacePath()`
+4. inspect `extension.test.ts` for the customer_orders + Synapse scenario
+5. inspect whether include-file writing is handled by `RepoWriter.ts`, `NewArtifactWriter.ts`, or both
+6. treat Synapse publish as embedded in job config unless repo inspection proves otherwise
 
-If real workspace write is failing or partial, fix the root cause.
+## What I know vs don’t know
+**I know:**
+- chat flow is expected to drive create/write
+- `RepoWriter.getWorkspacePath()` is an important real-write path
+- `customer_orders -> Synapse` is a real golden scenario
+- Synapse publish is described as a generated section/module with `data_sync`
 
-Possible areas to inspect:
-
-- session state not preserved between `/create` and `/write`
-- artifact list not persisted correctly
-- `RepoWriter.getWorkspacePath()` not resolving correctly in extension host
-- write command still using temp-only code path
-- preview artifacts generated but not passed into actual writer
-- include files omitted from write phase
-- overwrite safety blocking valid writes
-- wrong workspace root or relative path handling
-
-### 6. Improve user-facing write feedback
-
-After fixing, improve the write UX so the chat response clearly reports:
-
-- write started
-- target workspace root
-- files created
-- files overwritten
-- files skipped
-- any blocked writes and why
-
-The user should not have to guess whether anything was actually written.
-
-### 7. Add automated coverage
-
-Add tests that cover the real write orchestration logic as much as possible.
-
-At minimum add coverage for:
-
-- `/create` produces artifacts in session state
-- `/write` consumes the same session artifacts
-- writer receives actual artifact set
-- include files are written with the job config
-- Synapse publish artifacts are written when requested
-- workspace path resolution is not temp-only in production code
-- user-facing write summary is returned
-
-If true end-to-end real workspace write cannot be fully automated in tests, then:
-- add the highest-value integration/unit coverage possible, and
-- document the exact manual validation steps used.
-
-## Deliverable format
-
-Provide a final report with these sections:
-
-1. **Real Write Result**
-   - success/failure
-   - actual workspace path used
-   - files written
-
-2. **Root Cause**
-   - if anything was broken, explain the exact cause
-
-3. **Fix Applied**
-   - exact files changed
-   - exact methods changed
-   - why the fix works
-
-4. **Real Written Artifacts**
-   - exact paths
-   - short excerpts
-
-5. **Preview vs Real Comparison**
-   - pass/fail checklist
-
-6. **Tests Added/Updated**
-   - names of tests
-   - what each test verifies
-
-7. **Remaining Gaps**
-   - anything still manual or unresolved
-
-## Acceptance criteria
-
-This task is complete only if all of the following are true:
-
-- `@etl /create` followed by `@etl /write` writes files to the real selected workspace
-- the written artifacts match the validated preview for the scenario
-- job config + include files + Synapse-related artifacts are all present when expected
-- the chat response clearly reports what was written
-- automated coverage is added or improved for the write orchestration path
-- `npm test` passes after the changes
-
-## Important constraints
-
-- Do not regress the already-passing temp artifact tests
-- Do not remove the existing doc-driven output strategy behavior
-- Do not weaken validators just to make write pass
-- Prefer fixing orchestration/state/path issues over bypassing safeguards
-- Keep the implementation aligned with the framework docs and current naming conventions
+**I don’t know:**
+- whether `package.json` also registers a separate command path
+- whether dedicated fixtures already exist in a fixtures folder
+- whether include writing is centralized in one file or spread across several
+- the exact final repo implementation without inspecting current code
