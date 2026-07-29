@@ -1,8 +1,8 @@
 # askAlpha — Runtime Model Routing Strategy
 
-**Status:** Proposed runtime operating standard — revision 1.0  
+**Status:** Proposed runtime operating standard — revision 1.1  
 **Available KMAI server models:** GPT-5.1, GPT-5.2, GPT-5.5  
-**Scope:** Model selection inside the askAlpha agentic runtime. This document does not define VS Code or GitHub Copilot custom agents.
+**Scope:** Model selection inside the askAlpha agentic runtime. This document does not define VS Code or GitHub Copilot custom agents. Token metering, organizational attribution, showback, and billback are governed by `RUNTIME_USAGE_METERING_AND_CHARGEBACK.md`.
 
 ---
 
@@ -10,7 +10,7 @@
 
 Use the three available models as a governed runtime portfolio rather than assigning one model to every agent. Model choice must balance answer quality, latency, cost, risk, and failure recovery while preserving the deterministic primary path and all authorization and SQL safeguards.
 
-This routing policy is an initial hypothesis. It must be validated with askAlpha golden questions, production-like traces, latency, token usage, and human review before being treated as a permanent model-quality ranking.
+This routing policy is an initial hypothesis. It must be validated with askAlpha golden questions, production-like traces, latency, token usage, cost, and human review before being treated as a permanent model-quality ranking.
 
 ---
 
@@ -25,7 +25,9 @@ This routing policy is an initial hypothesis. It must be validated with askAlpha
 7. **No model voting by default.** Multiple-model ensembles add latency and cost and should be introduced only when measured evidence justifies them.
 8. **Bound retries.** Repeated failure escalates once according to policy and then stops safely or asks for clarification.
 9. **Version the policy.** Model mappings, thresholds, fallbacks, and prompts are governed configuration with publish and rollback.
-10. **Measure actual usage.** Every model call records the requested model, actual model, agent, policy reason, latency, tokens, retry or escalation, and outcome.
+10. **Measure every actual call.** Every model call records the requested model, actual model, agent, policy reason, latency, provider-observed tokens, retry or escalation, and outcome.
+11. **Aggregate the whole request.** All model calls, repairs, fallbacks, and reviews triggered by one user request roll up to one request-level usage summary.
+12. **Attribute through trusted identity.** User/team/department/cost-center attribution comes from authenticated backend context and an effective-dated hierarchy, never from client input.
 
 ---
 
@@ -57,6 +59,8 @@ The names above should be stored as deployment aliases in configuration. The pol
 | `report_writer` | GPT-5.2 | GPT-5.5 for complex multi-section reports | Preserve evidence, caveats, and traceability. |
 | `executive_reviewer` or coverage review | GPT-5.5 when invoked | GPT-5.2 only for standard low-risk review if benchmarked | Do not invoke on every simple deterministic answer; use a risk threshold. |
 
+Every actual invocation in this table creates its own idempotent usage event, including failed attempts, fallback calls, and review calls.
+
 ---
 
 ## 5. Runtime model policy contract
@@ -79,6 +83,7 @@ timeout_seconds: 45
 max_input_tokens: 18000
 max_output_tokens: 3000
 confidence_threshold: 0.80
+usage_metering_policy_version: 1
 escalation_triggers:
   - low_confidence
   - more_than_two_joins
@@ -98,7 +103,8 @@ The policy registry should also support:
 - latency and token budgets;
 - feature flags and rollout percentage;
 - effective dates;
-- owner, approver, change reason, and rollback version.
+- owner, approver, change reason, and rollback version;
+- linkage to the effective price catalog and usage-metering policy.
 
 ---
 
@@ -116,7 +122,8 @@ The router should calculate a deterministic risk or complexity score before mode
 - sensitive field or restricted domain involvement;
 - historical failure rate for this intent or pattern;
 - previous model confidence and validation result;
-- user-facing SLA and remaining latency budget.
+- user-facing SLA and remaining latency budget;
+- request-level token and cost budget already consumed by prior calls.
 
 Model routing should consume this score but should not replace explicit policy rules for high-risk cases.
 
@@ -153,7 +160,7 @@ Stop rather than continue escalating when:
 - authorization denies the request;
 - required metadata is absent or unpublished;
 - no safe join path exists;
-- the query cannot fit row, scan, or time limits;
+- the query cannot fit row, scan, time, token, or request-cost limits;
 - repeated validation fails after the maximum attempt count;
 - the required model is unavailable and the fallback is not approved for that risk tier.
 
@@ -173,30 +180,58 @@ For service outages, do not automatically downgrade a high-risk task to a weaker
 
 Do not retry the same prompt unchanged. Each repair attempt must receive the validation failure in a structured, redacted form and remain within the original semantic plan.
 
+Every provider call, including an unsuccessful repair or fallback, is metered separately and included in the originating request total.
+
 ---
 
-## 9. Observability and audit
+## 9. Observability, usage metering, and audit
 
 Record for every model call:
 
-- trace ID and parent agent span;
+- `model_call_id`, request ID, trace ID, and parent agent span;
+- authenticated subject identifier and effective team/department/cost-center snapshot;
 - agent or function and route;
 - policy ID, version, and risk tier;
 - requested and actual deployment or model;
-- escalation or fallback reason;
+- escalation or fallback reason and attempt number;
 - prompt-template and metadata versions;
-- input and output token counts;
+- provider-observed input, output, total, and supported token-category counts;
+- usage status: observed, partial, not observed, or explicitly estimated;
 - latency, timeout, retry count, and status;
 - structured-output validation result;
 - SQL-policy and authorization result when applicable;
-- estimated or actual cost where available;
+- effective price-catalog version, estimated cost, currency, and reconciliation status;
 - final answer coverage and user feedback.
 
-Do not log raw tokens, secrets, unrestricted metadata, raw result rows, or sensitive prompts. Use hashes, counts, approved identifiers, and redacted summaries.
+Do not log raw tokens, secrets, unrestricted metadata, raw result rows, SQL literals, or sensitive prompts/responses. Use approved identifiers, hashes, counts, and redacted summaries.
+
+The model client/gateway should emit one shared `ModelUsageEvent` contract. Individual agents must not build inconsistent token-accounting implementations.
 
 ---
 
-## 10. Evaluation and rollout plan
+## 10. Request aggregation and billback
+
+All model-call events sharing the same request ID are aggregated into one `RequestUsageSummary`. Daily and monthly rollups then group usage by:
+
+- user;
+- team;
+- department/line of business;
+- cost center;
+- model/deployment;
+- agent, route, intent, and policy version;
+- environment and application version.
+
+Follow the lifecycle defined in `RUNTIME_USAGE_METERING_AND_CHARGEBACK.md`:
+
+```text
+metering → showback → provider-bill reconciliation → approved chargeback
+```
+
+Do not treat calculated model prices as final financial charges until the price catalog, discounts, shared costs, hierarchy rules, dispute process, and Finance approval are in place. Closed monthly allocations require adjustment records rather than direct edits.
+
+---
+
+## 11. Evaluation and rollout plan
 
 Create a model-routing benchmark from the existing golden suite. Evaluate each relevant agent and model pair on:
 
@@ -208,22 +243,24 @@ Create a model-routing benchmark from the existing golden suite. Evaluate each r
 - false-confidence rate;
 - retries and escalation rate;
 - p50 and p95 latency;
-- token and cost consumption;
+- input/output tokens and request-level total tokens;
+- estimated and reconciled cost;
 - human review corrections.
 
 Recommended rollout:
 
-1. **Baseline:** capture current model behavior without changing routing.
-2. **Shadow:** run alternative model choices on a small redacted evaluation set without affecting user answers.
+1. **Baseline:** capture current model behavior and usage without changing routing.
+2. **Shadow:** run alternative model choices on a small redacted evaluation set without affecting user answers; tag shadow cost separately.
 3. **Low-risk migration:** move intent and clarification tasks to GPT-5.1 when benchmark thresholds pass.
 4. **Default workhorse:** use GPT-5.2 for standard runtime generation and writing.
 5. **Selective escalation:** enable GPT-5.5 only for documented triggers.
-6. **Canary:** route a small percentage by policy version and compare quality, latency, and cost.
-7. **Publish:** promote the policy only after release gates pass and retain instant rollback.
+6. **Canary:** route a small percentage by policy version and compare quality, latency, tokens, and cost.
+7. **Showback:** validate user/team/department attribution and estimated cost with owners.
+8. **Publish:** promote the policy only after release gates pass and retain instant rollback.
 
 ---
 
-## 11. Initial acceptance criteria
+## 12. Initial acceptance criteria
 
 - Runtime model selection is centralized behind a versioned policy service.
 - No runtime agent chooses its own model.
@@ -233,6 +270,10 @@ Recommended rollout:
 - GPT-5.5 is invoked only by governed complexity, risk, failure, or review rules.
 - Model fallback and retry counts are bounded.
 - Deterministic recipes and all safety and authorization controls remain unchanged.
-- Golden tests compare quality, latency, retries, and cost by model and agent.
-- Traces identify policy version, model used, reason, and outcome without leaking sensitive content.
+- Golden tests compare quality, latency, retries, tokens, and cost by model and agent.
+- Every actual model call produces an idempotent usage event or a visible recoverable delivery failure.
+- Request summaries include all retries, repairs, fallbacks, escalations, and reviews.
+- Traces identify authenticated attribution, policy version, model used, reason, usage, cost status, and outcome without leaking sensitive content.
+- User/team/department/cost-center rollups reconcile to event-level records.
 - Model-policy changes support canary rollout and rollback without application redeployment where feasible.
+- Chargeback remains disabled until showback, provider-bill reconciliation, and required approvals are complete.
