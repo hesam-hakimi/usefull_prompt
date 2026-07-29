@@ -13,7 +13,7 @@ Read these files completely before proposing or changing code:
 1. `docs/plans/MASTER_PLAN_V1.md`
 2. `docs/plans/PRODUCT_ORDER_AND_BACKLOG.md`
 3. `docs/plans/QUALITY_GATES.md`
-4. `docs/plans/PRODUCT_ORDER_AND_BACKLOG.md`
+4. `docs/plans/RUNTIME_MODEL_ROUTING_STRATEGY.md`
 5. `docs/TECHNICAL_DOCUMENTATION.md` or the current equivalent technical document
 6. Repository contribution instructions, CODEOWNERS, ADRs, and existing test documentation
 
@@ -58,7 +58,6 @@ The application currently enters the landing page directly. Add an explicit logi
 - Redis and Azure AI Search are not assumed to be primary runtime dependencies. Verify live wiring before changing them.
 - Do not introduce a new orchestration framework solely for novelty. Add planner/agent complexity only when it solves an approved requirement and is covered by tests and observability.
 
-
 ## Scale, self-service, and multi-source rules
 
 - Design the metadata platform for hundreds of tables; never send the full catalog to an LLM. Narrow candidates by authorization, domain, source, intent, and capability first.
@@ -72,6 +71,20 @@ The application currently enters the landing page directly. Add an explicit logi
 - Block cross-source joins in the first release.
 - Add parity, dialect-conformance, source-auth, cancellation, timeout, and query-correlation tests.
 - Bulk metadata import must be incremental, idempotent, resumable, auditable, and safe for schema drift.
+
+## KMAI runtime model-routing requirements
+
+The GPT-5.1, GPT-5.2, and GPT-5.5 requirement applies to the askAlpha server agentic flow, not to the existing VS Code or GitHub Copilot development agents. Do not create or replace `.github/agents` profiles for this requirement.
+
+- Implement a centralized, versioned `RuntimeModelPolicy` and resolver.
+- The orchestrator selects the runtime model; individual agents do not choose their own deployment.
+- Preserve deterministic model-free routes where possible.
+- Start with GPT-5.1 for benchmark-approved low-risk routing and clarification steps, GPT-5.2 for standard generation and writing, and GPT-5.5 for governed complex or high-risk escalation and review.
+- Make model aliases, fallbacks, thresholds, attempts, timeouts, token budgets, rollout percentage, and escalation triggers configurable.
+- Do not silently downgrade high-risk work during model outage unless policy explicitly permits it.
+- Record policy version, requested and actual model, agent, routing reason, tokens, latency, retries or escalation, validation outcome, and cost indicator in redacted traces.
+- Add golden, shadow, canary, fallback, timeout, and rollback tests before changing the default production route.
+- Model selection never bypasses metadata filtering, authorization, semantic-plan validation, SQL policy, limits, or output redaction.
 
 ## Login/auth requirements
 
