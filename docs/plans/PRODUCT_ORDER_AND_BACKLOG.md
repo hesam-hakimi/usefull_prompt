@@ -326,6 +326,42 @@ Operators can defend, diagnose, and improve each answer.
 
 ---
 
+## Epic 9A — Runtime token metering, organizational attribution, and billback — P1/P2
+
+### Outcome
+
+Every actual model API call is metered, all calls are aggregated to the originating request, usage is attributed through the authenticated user's effective team hierarchy, and trustworthy showback/reconciliation data is available before formal chargeback is enabled.
+
+### Work items
+
+- Implement shared `ModelUsageCollector`, typed `ModelUsageEvent`, and `RequestUsageSummary` contracts around the Azure OpenAI/model gateway.
+- Capture provider-observed input, output, total, and supported token-category counts for streaming and non-streaming calls.
+- Record every retry, repair, fallback, escalation, shadow, and reviewer call with a unique `model_call_id`.
+- Derive the subject from validated backend identity; resolve and snapshot user -> team -> department/line of business -> cost center.
+- Add durable outbox delivery, retry, dead-letter monitoring, idempotency, and duplicate prevention.
+- Add append-only event storage, request summaries, daily aggregates, and monthly user/team/department/cost-center/model/agent/route aggregates.
+- Add versioned effective-dated model price catalog, estimated-cost calculation, and explicit `estimated/reconciled/final/excluded` status.
+- Add protected usage/reporting/reconciliation/export APIs with least privilege and audit.
+- Add missing-usage and unattributed-hierarchy exception queues and alerts.
+- Roll out in stages: metering -> showback -> provider-bill reconciliation -> approved chargeback.
+- Add monthly freeze, approval, adjustment, dispute, export, and close controls before billback is enabled.
+- Follow the detailed contract in `docs/plans/RUNTIME_USAGE_METERING_AND_CHARGEBACK.md`.
+
+### Acceptance criteria
+
+- Every real provider call creates exactly one idempotent event or a visible recoverable delivery failure.
+- A request summary includes all successful and unsuccessful model calls triggered by that request.
+- Client-supplied identity, team, cost-center, token, or cost values cannot influence authoritative records.
+- Historical attribution preserves the hierarchy snapshot effective at call time.
+- Usage facts contain no raw prompts, responses, SQL literals, result rows, secrets, or access tokens.
+- Event, request, daily, and monthly totals reconcile.
+- Missing provider usage and unattributed hierarchy are observable exceptions, not silently estimated/defaulted values.
+- Price and allocation rules are versioned, effective-dated, auditable, and rollback-capable.
+- Showback is reviewed before chargeback; formal chargeback requires provider-bill reconciliation and named Finance/Platform/Product/Security approvals.
+- Metering/reporting failure does not fail the user request, and undelivered events remain durably recoverable.
+
+---
+
 ## Epic 10 — Deployment and runtime hardening — P1
 
 ### Outcome
@@ -363,12 +399,14 @@ The product meets route-specific SLAs at predictable cost.
 - Curated aggregate layer with freshness and reconciliation.
 - Concurrency, timeout, cancellation, retry, circuit-breaker, and backpressure controls.
 - Performance/load testing.
+- Use metered request-level token/cost totals as inputs to complexity, budget, and model-routing policies.
 
 ### Acceptance criteria
 
 - SLA and capacity targets are met.
 - Heavy requests cannot monopolize the service.
 - Aggregate answers reconcile with source data.
+- Cost per successful answer/report and cost by organizational hierarchy are measurable.
 
 ---
 
@@ -455,9 +493,11 @@ Users can move from chat answers to richer governed analytical experiences.
 - Complete Epic 2 golden baseline.
 - Start Epic 3 metadata registry wrapper.
 - Repoint roles/questions while preserving fallbacks.
+- Implement Epic 9A Slice A: shared per-call token instrumentation and request-level aggregation behind a feature flag.
 
 ### Increment 3
 
 - Complete initial Epic 3 publish/rollback flow.
 - Start Epic 4 semantic query plan contract.
 - Add initial observability markers from Epic 9.
+- Implement Epic 9A Slice B/C: authenticated hierarchy snapshot, price catalog, daily/monthly aggregates, and showback-only reporting.
