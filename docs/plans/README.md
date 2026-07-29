@@ -3,8 +3,8 @@
 This package contains:
 
 - `MASTER_PLAN_V1.md` — source-of-truth roadmap and phased delivery model.
-- `PRODUCT_ORDER_AND_BACKLOG.md` — prioritized product order and executable epics.
-- `QUALITY_GATES.md` — mandatory quality, security, test, and release controls.
+- `PRODUCT_ORDER_AND_BACKLOG.md` — prioritized product order and executable epics, including Epic 9A for runtime token metering and organizational cost attribution.
+- `QUALITY_GATES.md` — mandatory quality, security, test, reconciliation, and release controls.
 - `RUNTIME_MODEL_ROUTING_STRATEGY.md` — governed use of GPT-5.1, GPT-5.2, and GPT-5.5 inside the KMAI server agentic flow.
 - `RUNTIME_USAGE_METERING_AND_CHARGEBACK.md` — per-model-call input/output token metering, per-request totals, user/team/department attribution, showback, reconciliation, and approved billback.
 - `COPILOT_AGENT_EXECUTION_PROMPT.md` — paste-ready implementation prompt for the existing GitHub Copilot development agents.
