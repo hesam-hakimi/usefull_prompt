@@ -1,21 +1,48 @@
-Continue and close Phase 0 only. Do not start Phase 1.
+Continue Phase 0 only. Do not start Phase 1.
 
-Complete all remaining repository-side work that can be done now:
+Resolve the remaining technical blockers that can be fixed in the repository:
 
-1. Run and review the full 25–50 question golden baseline and record the results.
-2. Complete and attach the login/auth validation evidence.
-3. Finalize the Phase 0 threat model, data-flow diagram, environment matrix, Definition of Done, and status/evidence documents.
-4. Identify the exact CI and security check names required for branch protection and document the recommended ruleset configuration.
-5. For actions requiring GitHub admin access or stakeholder approval, create a clear manual-action checklist and mark them as external blockers. Do not claim they are completed.
-6. Re-run all relevant backend tests, frontend tests, lint, build, and golden-baseline validation.
-7. Do not modify unrelated files, including the existing config_loader.py change.
-8. Update PHASE_0_STATUS_AND_EVIDENCE.md with exact commands, results, evidence, remaining blockers, and approval owners.
+1. Investigate the 7 backend test failures.
+2. For the 6 `test_config_and_env.py` failures:
+   - inspect the current diff in `config_loader.py`;
+   - determine exactly which removed auth/security mappings and override-cleanup behavior caused the failures;
+   - restore only the required behavior with the smallest safe change;
+   - do not overwrite unrelated valid work;
+   - show the exact before/after behavior and tests proving the fix.
 
-At the end, clearly report:
-- files changed;
-- validation commands and results;
-- completed Phase 0 acceptance criteria;
-- remaining external/manual blockers;
-- whether Phase 0 is genuinely ready for final approval.
+3. For the `openai==2.8.1` Azure MSI token-provider incompatibility:
+   - identify whether the issue is dependency pinning, SDK API usage, or the authentication adapter;
+   - compare the installed version with the repository’s declared supported version;
+   - implement the smallest compatible fix;
+   - do not replace managed identity with an API key;
+   - add a regression test for the Azure MSI authentication path.
 
-Do not begin Phase 1 and do not mark Phase 0 complete while required evidence or approvals are still missing.
+4. After the fixes, rerun:
+   - the complete backend test suite with coverage;
+   - all frontend tests;
+   - frontend lint and build;
+   - the offline golden baseline;
+   - the full live 25-question golden baseline.
+
+5. For the live golden run, record per-question:
+   - pass/fail/blocked;
+   - route and model used;
+   - selected dataset or recipe;
+   - SQL validation result;
+   - latency;
+   - redacted failure reason.
+
+6. Update `PHASE_0_STATUS_AND_EVIDENCE.md` with exact commands and results.
+
+7. Keep GitHub branch protection, required-check configuration, evidence attachment, and stakeholder approvals listed as external/manual actions. Do not claim they are complete.
+
+At the end, report:
+- root cause of each backend failure;
+- exact files changed;
+- complete validation results;
+- live golden-baseline results;
+- remaining technical blockers;
+- remaining manual blockers;
+- whether Phase 0 is technically ready for approval.
+
+Do not mark Phase 0 complete unless all repository-side tests pass and the live golden baseline has successfully executed. Do not modify unrelated files.
