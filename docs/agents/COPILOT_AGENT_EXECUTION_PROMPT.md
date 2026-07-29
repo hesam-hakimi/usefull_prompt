@@ -14,8 +14,9 @@ Read these files completely before proposing or changing code:
 2. `docs/plans/PRODUCT_ORDER_AND_BACKLOG.md`
 3. `docs/plans/QUALITY_GATES.md`
 4. `docs/plans/RUNTIME_MODEL_ROUTING_STRATEGY.md`
-5. `docs/TECHNICAL_DOCUMENTATION.md` or the current equivalent technical document
-6. Repository contribution instructions, CODEOWNERS, ADRs, and existing test documentation
+5. `docs/plans/RUNTIME_USAGE_METERING_AND_CHARGEBACK.md`
+6. `docs/TECHNICAL_DOCUMENTATION.md` or the current equivalent technical document
+7. Repository contribution instructions, CODEOWNERS, ADRs, and existing test documentation
 
 Treat `MASTER_PLAN_V1.md` as the delivery source of truth. Treat the technical documentation and live code as the source of truth for current behavior. When they disagree, do not guess: record the discrepancy and propose the smallest safe correction.
 
@@ -35,7 +36,7 @@ The application currently enters the landing page directly. Add an explicit logi
 
 1. Inspect the repository before writing a plan.
 2. Identify the live entrypoints, active runtime paths, existing tests, and inactive/legacy code.
-3. State assumptions and unresolved questions that materially affect scope, security, compatibility, or deployment.
+3. State assumptions and unresolved questions that materially affect scope, security, compatibility, deployment, privacy, or financial reporting.
 4. Produce a focused implementation plan with files, contracts, tests, migration, feature flag, and rollback.
 5. Create or use a dedicated feature branch.
 6. Implement the smallest compatibility slice that delivers the requested outcome.
@@ -82,9 +83,32 @@ The GPT-5.1, GPT-5.2, and GPT-5.5 requirement applies to the askAlpha server age
 - Start with GPT-5.1 for benchmark-approved low-risk routing and clarification steps, GPT-5.2 for standard generation and writing, and GPT-5.5 for governed complex or high-risk escalation and review.
 - Make model aliases, fallbacks, thresholds, attempts, timeouts, token budgets, rollout percentage, and escalation triggers configurable.
 - Do not silently downgrade high-risk work during model outage unless policy explicitly permits it.
-- Record policy version, requested and actual model, agent, routing reason, tokens, latency, retries or escalation, validation outcome, and cost indicator in redacted traces.
 - Add golden, shadow, canary, fallback, timeout, and rollback tests before changing the default production route.
 - Model selection never bypasses metadata filtering, authorization, semantic-plan validation, SQL policy, limits, or output redaction.
+
+## Runtime token metering and chargeback requirements
+
+Implement this as shared server-side instrumentation around the Azure OpenAI/model client or gateway. Do not add separate inconsistent accounting logic to every agent.
+
+- Create typed `ModelUsageEvent` and `RequestUsageSummary` contracts.
+- Emit one idempotent usage event for every actual provider call, including failed calls, retries, repairs, fallbacks, escalations, shadow calls, and reviewer calls.
+- Capture provider-observed input, output, total, and supported token-category counts for streaming and non-streaming responses.
+- For streaming, finalize usage from the final chunk/response metadata; record `partial` or `not_observed` when unavailable.
+- Never silently estimate missing usage. Explicit estimates must be labeled and excluded from reconciled/final chargeback unless approved.
+- Correlate model-call ID, request ID, trace ID, agent, route, policy version, requested/actual model, attempt, reason, latency, validation outcome, and status.
+- Derive the authenticated subject from validated backend identity context. Never trust browser-supplied user/team/department/cost-center values.
+- Resolve an effective-dated hierarchy and snapshot user -> team -> department/line of business -> cost center on each usage event.
+- Store identity display details separately from the usage fact table unless governance approves otherwise.
+- Do not store raw prompts, responses, SQL literals, result rows, raw claims, access tokens, or secrets in usage facts.
+- Persist through a durable outbox or equivalent retry mechanism so reporting-store failure does not fail the user request and undelivered events remain recoverable and alertable.
+- Enforce unique `model_call_id` to prevent duplicate charging.
+- Add a versioned, effective-dated model price catalog; do not hardcode rates in orchestration logic.
+- Produce event, request, daily, and monthly aggregates by user, team, department, cost center, model, agent, route, policy version, and environment.
+- Implement protected reporting/export APIs with least privilege, server-side filters, pagination, date limits, and audit logs.
+- Roll out in stages: metering -> showback -> provider-bill reconciliation -> approved chargeback.
+- Do not label estimated cost as final financial chargeback. Chargeback requires Finance, Platform, Product, Security/privacy, and relevant owner approval.
+- Closed monthly allocations require auditable adjustments rather than direct edits.
+- Add reconciliation tests proving call events sum to request totals and request totals sum to daily/monthly aggregates.
 
 ## Login/auth requirements
 
@@ -105,8 +129,10 @@ The GPT-5.1, GPT-5.2, and GPT-5.5 requirement applies to the askAlpha server age
 - Never log raw prompts, SQL literals, result data, tokens, or sensitive claims without an approved redaction design.
 - Never enable mock auth in hosted production.
 - Never add broad wildcard authorization.
+- Never let usage metering or reporting trust client attribution.
+- Never make chargeback calculations immutable before showback, reconciliation, dispute, and approval controls exist.
 - Never self-approve or self-merge.
-- Stop and report if the requested implementation would bypass a release gate or contradict a documented security requirement.
+- Stop and report if the requested implementation would bypass a release gate or contradict a documented security, privacy, records-management, or financial-control requirement.
 
 ## Test expectations
 
@@ -117,7 +143,10 @@ At minimum, add tests appropriate to the slice:
 - integration tests for the changed runtime path;
 - security and authorization regression tests;
 - frontend route/auth tests for user-facing auth changes;
-- golden/parity tests when routing, metadata, SQL, KPI, or rendering changes;
+- golden/parity tests when routing, metadata, SQL, KPI, rendering, model selection, or usage accounting changes;
+- streaming and non-streaming token extraction tests;
+- retry/fallback/escalation request-total tests;
+- identity spoofing, hierarchy snapshot, outbox, idempotency, redaction, pricing, aggregation, reconciliation, and export-authorization tests;
 - build/lint/type checks;
 - deployment smoke tests when runtime configuration changes.
 
@@ -135,13 +164,13 @@ Included and explicitly excluded work.
 How behavior changes while preserving compatibility.
 
 ### Architecture and security
-Contracts, authorization, SQL/data safety, redaction, and ADR references.
+Contracts, authorization, SQL/data safety, identity attribution, privacy, redaction, pricing, and ADR references.
 
 ### Files changed
 Each important file and its purpose.
 
 ### Tests and evidence
-Commands, results, screenshots, traces, and regression comparisons.
+Commands, results, screenshots, traces, usage/reconciliation evidence, and regression comparisons.
 
 ### Migration and feature flag
 How the change is enabled safely.
@@ -159,7 +188,8 @@ Do not report the work as complete unless:
 - acceptance criteria are met;
 - relevant tests pass;
 - documentation is updated;
-- observability and redaction are addressed;
+- observability, usage metering, identity attribution, and redaction are addressed where applicable;
 - migration and rollback are proven;
 - no unrelated dirty files are included;
+- showback/chargeback status is accurately labeled;
 - the pull request is ready for human review.
