@@ -1,48 +1,45 @@
-Continue Phase 0 only. Do not start Phase 1.
+Phase 0 repository-side implementation is now technically ready. Do not start Phase 1.
 
-Resolve the remaining technical blockers that can be fixed in the repository:
+Perform the final Phase 0 packaging and review preparation:
 
-1. Investigate the 7 backend test failures.
-2. For the 6 `test_config_and_env.py` failures:
-   - inspect the current diff in `config_loader.py`;
-   - determine exactly which removed auth/security mappings and override-cleanup behavior caused the failures;
-   - restore only the required behavior with the smallest safe change;
-   - do not overwrite unrelated valid work;
-   - show the exact before/after behavior and tests proving the fix.
+1. Audit the complete diff:
+   - confirm every changed file is required for Phase 0;
+   - remove generated, duplicate, temporary, or unrelated files;
+   - verify no secrets, tokens, sensitive logs, local paths, or production data are included;
+   - confirm requirements.txt and pyproject.toml have consistent OpenAI dependency constraints.
 
-3. For the `openai==2.8.1` Azure MSI token-provider incompatibility:
-   - identify whether the issue is dependency pinning, SDK API usage, or the authentication adapter;
-   - compare the installed version with the repository’s declared supported version;
-   - implement the smallest compatible fix;
-   - do not replace managed identity with an API key;
-   - add a regression test for the Azure MSI authentication path.
+2. Reconfirm the final validation summary:
+   - backend: 553 passed, 3 skipped, coverage 78.14%;
+   - offline golden baseline: 9 passed;
+   - frontend: 29 files and 154 tests passed;
+   - lint and build passed;
+   - live golden baseline: 25 passed, 0 failed, 0 blocked, 0 skipped;
+   - git diff --check passed.
+   If any result has changed, report the new exact result.
 
-4. After the fixes, rerun:
-   - the complete backend test suite with coverage;
-   - all frontend tests;
-   - frontend lint and build;
-   - the offline golden baseline;
-   - the full live 25-question golden baseline.
+3. Update PHASE_0_STATUS_AND_EVIDENCE.md so it clearly separates:
+   - completed technical criteria;
+   - evidence and exact commands;
+   - remaining manual/platform actions;
+   - required stakeholder approvals;
+   - final Phase 0 status: “technically ready for approval, not yet formally approved.”
 
-5. For the live golden run, record per-question:
-   - pass/fail/blocked;
-   - route and model used;
-   - selected dataset or recipe;
-   - SQL validation result;
-   - latency;
-   - redacted failure reason.
+4. Record the missing per-call runtime model/deployment telemetry as a non-blocking follow-up issue for the runtime observability/model-routing work. Do not claim model usage was observed when it was not.
 
-6. Update `PHASE_0_STATUS_AND_EVIDENCE.md` with exact commands and results.
+5. Create a clean Phase 0 feature branch if one is not already active, commit the approved changes with a clear commit message, push it, and create or update a Draft PR.
 
-7. Keep GitHub branch protection, required-check configuration, evidence attachment, and stakeholder approvals listed as external/manual actions. Do not claim they are complete.
+6. In the PR include:
+   - scope and out-of-scope;
+   - root causes fixed;
+   - files changed;
+   - complete test and golden-baseline evidence;
+   - OpenAI/MSI compatibility rationale;
+   - security and authorization impact;
+   - migration and rollback;
+   - remaining manual actions and approval owners.
 
-At the end, report:
-- root cause of each backend failure;
-- exact files changed;
-- complete validation results;
-- live golden-baseline results;
-- remaining technical blockers;
-- remaining manual blockers;
-- whether Phase 0 is technically ready for approval.
+7. Do not configure branch protection unless access is available and explicitly authorized. Otherwise provide exact repository-settings steps and required check names for a repository administrator.
 
-Do not mark Phase 0 complete unless all repository-side tests pass and the live golden baseline has successfully executed. Do not modify unrelated files.
+8. Do not merge the PR and do not mark Phase 0 formally complete until the manual ruleset, evidence attachment, and stakeholder approvals are finished.
+
+At the end, provide the branch name, commit SHA, PR link, final changed-file count, and the remaining manual approval checklist.
