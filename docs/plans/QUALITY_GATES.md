@@ -102,7 +102,21 @@ Cover at minimum:
 - Bulk import and schema-drift processing time.
 - SQL Server versus Databricks route-level latency and cost evidence.
 
-## 3. Pull-request evidence checklist
+## 3. Runtime model-routing quality controls
+
+- Follow `docs/plans/RUNTIME_MODEL_ROUTING_STRATEGY.md` for model selection inside the KMAI server agentic flow.
+- Runtime agents may not select their own model; the orchestrator resolves a versioned policy.
+- GPT-5.1 is limited to benchmark-approved low-risk tasks such as intent classification, clarification, normalization, and error classification.
+- GPT-5.2 is the default generative workhorse for registry routing, bounded SQL generation, visualization, and ordinary report writing.
+- GPT-5.5 is reserved for documented ambiguity, complexity, sensitive KPI, repeated validation failure, executive review, and other high-risk triggers.
+- Deterministic recipes remain model-free where possible.
+- Model escalation never bypasses authorization, semantic-plan validation, SQL policy, row, scan, or time limits, or redaction.
+- Retry and escalation counts are bounded by policy.
+- High-risk requests must not silently downgrade to an unapproved weaker fallback during service failure.
+- Model-policy changes require versioning, canary evidence, and rollback.
+- Each model call must record policy version, requested and actual model, route, reason, latency, tokens, retry or escalation, and outcome without logging sensitive content.
+
+## 4. Pull-request evidence checklist
 
 Every implementation PR must include:
 
@@ -121,7 +135,7 @@ Every implementation PR must include:
 - Rollback steps.
 - Known limitations and follow-ups.
 
-## 4. Phase gates
+## 5. Phase gates
 
 ### Phase 0 gate
 
@@ -129,6 +143,7 @@ Every implementation PR must include:
 - Baseline/golden harness exists.
 - CI and contribution controls are active.
 - Threat model is reviewed.
+- Runtime model policy contract, baseline benchmark, trace fields, and rollback are defined.
 
 ### Phase 1 gate
 
@@ -176,7 +191,7 @@ Every implementation PR must include:
 - Rollback is ready.
 - Source-of-truth documentation is updated.
 
-## 5. Quality metrics
+## 6. Quality metrics
 
 Track at least:
 
@@ -196,10 +211,12 @@ Track at least:
 - Source/dialect execution success rate.
 - Data freshness failures.
 - Cost per successful answer/report.
+- Quality, structured-output validity, p50/p95 latency, tokens, retries, and cost by runtime agent, model, and policy version.
+- Model escalation, fallback, timeout, and safe-stop rates.
 - User feedback and reopened defects.
 - Change failure rate and mean time to recovery.
 
-## 6. Stop-the-line conditions
+## 7. Stop-the-line conditions
 
 Pause rollout or disable the affected feature flag when:
 
@@ -213,3 +230,6 @@ Pause rollout or disable the affected feature flag when:
 - Source routing executes against an unintended engine or unauthorized source.
 - Schema drift invalidates a certified KPI, join, example, or recipe without blocking publication.
 - Error, latency, or cost exceeds the release guardrail.
+- A runtime agent bypasses the centralized model policy or selects its own model.
+- A high-risk request is silently downgraded to an unapproved model.
+- Model routing materially degrades golden-answer quality, SQL validity, authorization behavior, or SLA without automatic rollback.
