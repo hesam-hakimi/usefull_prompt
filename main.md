@@ -108,5 +108,3 @@ The change is complete only when:
 * the final response lists the root cause, changed files, tests executed, compatibility impact, and any remaining platform limitation.
 
 Do not claim completion based only on documentation changes. Verify the actual writer, manifests, generated output, and packaged VSIX contents.
-
-بعد از اینکه این تغییر پیاده و تست شد، می‌توانی Agentهای مخصوص توسعه‌ی خود پروژه مثل Orchestrator و Verifier را داخل `.github/agents` قرار بدهی؛ آن زمان این پوشه فقط control plane توسعه خواهد بود و دیگر با خروجی Extension قاطی نمی‌شود.
