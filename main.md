@@ -1,4 +1,3 @@
-فعلاً درست کردی که Agentهای توسعه را وارد `.github/agents` نکردی؛ ابتدا باید مرز مالکیت این پوشه اصلاح شود. این پرامپت را در Copilot Agent Mode اجرا کن:
 
 Implement a strict ownership boundary between repository-maintainer Copilot agents and agent definitions delivered by the extension.
 
