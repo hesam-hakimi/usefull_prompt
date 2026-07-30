@@ -1,45 +1,47 @@
-Phase 0 repository-side implementation is now technically ready. Do not start Phase 1.
+Phase 0 technical implementation and validation are complete. Do not start Phase 1.
 
-Perform the final Phase 0 packaging and review preparation:
+Prepare the final manual approval handoff only:
 
-1. Audit the complete diff:
-   - confirm every changed file is required for Phase 0;
-   - remove generated, duplicate, temporary, or unrelated files;
-   - verify no secrets, tokens, sensitive logs, local paths, or production data are included;
-   - confirm requirements.txt and pyproject.toml have consistent OpenAI dependency constraints.
+1. Create a concise repository-admin checklist for:
+   - branch protection/ruleset configuration;
+   - exact required GitHub Check names;
+   - required CODEOWNERS reviews;
+   - dismissal of stale approvals;
+   - prevention of direct pushes and force pushes;
+   - required conversation resolution.
 
-2. Reconfirm the final validation summary:
-   - backend: 553 passed, 3 skipped, coverage 78.14%;
-   - offline golden baseline: 9 passed;
-   - frontend: 29 files and 154 tests passed;
-   - lint and build passed;
-   - live golden baseline: 25 passed, 0 failed, 0 blocked, 0 skipped;
-   - git diff --check passed.
-   If any result has changed, report the new exact result.
+2. Prepare the final stakeholder approval matrix with:
+   - Product;
+   - Security;
+   - Architecture/Engineering;
+   - Data;
+   - QA;
+   - Platform/DevOps;
+   - Operations.
+   For each owner, specify exactly what evidence they must review.
 
-3. Update PHASE_0_STATUS_AND_EVIDENCE.md so it clearly separates:
-   - completed technical criteria;
-   - evidence and exact commands;
-   - remaining manual/platform actions;
-   - required stakeholder approvals;
-   - final Phase 0 status: “technically ready for approval, not yet formally approved.”
+3. Prepare a PR evidence index linking:
+   - backend test results;
+   - frontend tests, lint, and build;
+   - offline golden baseline;
+   - live 25-question golden baseline;
+   - threat model;
+   - data-flow diagram;
+   - environment matrix;
+   - Definition of Done;
+   - dependency/MSI compatibility evidence;
+   - rollback instructions.
 
-4. Record the missing per-call runtime model/deployment telemetry as a non-blocking follow-up issue for the runtime observability/model-routing work. Do not claim model usage was observed when it was not.
+4. Record `model_used: not_observed` as a non-blocking follow-up under runtime model-routing and usage-metering observability. Do not present it as observed evidence.
 
-5. Create a clean Phase 0 feature branch if one is not already active, commit the approved changes with a clear commit message, push it, and create or update a Draft PR.
+5. Update PHASE_0_STATUS_AND_EVIDENCE.md with the final status:
+   “Technically ready for approval; formal Phase 0 closure is pending manual repository controls and stakeholder approvals.”
 
-6. In the PR include:
-   - scope and out-of-scope;
-   - root causes fixed;
-   - files changed;
-   - complete test and golden-baseline evidence;
-   - OpenAI/MSI compatibility rationale;
-   - security and authorization impact;
-   - migration and rollback;
-   - remaining manual actions and approval owners.
+6. Do not make additional runtime changes, do not start Phase 1, and do not mark the PR ready or merge it.
 
-7. Do not configure branch protection unless access is available and explicitly authorized. Otherwise provide exact repository-settings steps and required check names for a repository administrator.
-
-8. Do not merge the PR and do not mark Phase 0 formally complete until the manual ruleset, evidence attachment, and stakeholder approvals are finished.
-
-At the end, provide the branch name, commit SHA, PR link, final changed-file count, and the remaining manual approval checklist.
+At the end, provide:
+- the exact GitHub repository-settings steps;
+- the required check names;
+- the stakeholder approval table;
+- the PR evidence checklist;
+- the remaining actions required before Phase 0 can be formally closed.
