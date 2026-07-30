@@ -1,47 +1,64 @@
-Phase 0 technical implementation and validation are complete. Do not start Phase 1.
+Continue Phase 0 only. Do not start Phase 1.
 
-Prepare the final manual approval handoff only:
+The remaining repository-side technical blocker is backend test coverage: current coverage is 78.14%, while the required gate is greater than 85%.
 
-1. Create a concise repository-admin checklist for:
-   - branch protection/ruleset configuration;
-   - exact required GitHub Check names;
-   - required CODEOWNERS reviews;
-   - dismissal of stale approvals;
-   - prevention of direct pushes and force pushes;
-   - required conversation resolution.
+Raise meaningful backend coverage above 85% without gaming the metric.
 
-2. Prepare the final stakeholder approval matrix with:
-   - Product;
-   - Security;
-   - Architecture/Engineering;
-   - Data;
-   - QA;
-   - Platform/DevOps;
-   - Operations.
-   For each owner, specify exactly what evidence they must review.
+1. Generate and inspect the detailed coverage report by module and line.
+2. Prioritize uncovered production-critical paths, especially:
+   - authentication and authorization;
+   - configuration and environment handling;
+   - SQL validation and safety;
+   - primary and fallback orchestration;
+   - Azure OpenAI/MSI authentication;
+   - error handling, timeout, cancellation, and safe-stop behavior;
+   - API endpoints changed or relied on by Phase 0.
 
-3. Prepare a PR evidence index linking:
-   - backend test results;
-   - frontend tests, lint, and build;
-   - offline golden baseline;
-   - live 25-question golden baseline;
-   - threat model;
-   - data-flow diagram;
-   - environment matrix;
-   - Definition of Done;
-   - dependency/MSI compatibility evidence;
-   - rollback instructions.
+3. Add meaningful unit and integration tests covering:
+   - success paths;
+   - failure and exception paths;
+   - boundary conditions;
+   - unauthorized and deny-all scenarios;
+   - invalid configuration;
+   - dependency failure;
+   - redaction and security behavior.
 
-4. Record `model_used: not_observed` as a non-blocking follow-up under runtime model-routing and usage-metering observability. Do not present it as observed evidence.
+4. Do not:
+   - exclude production files merely to increase coverage;
+   - add empty or assertion-free tests;
+   - test implementation details without business value;
+   - weaken security, authorization, or SQL safety;
+   - modify unrelated runtime behavior;
+   - start Phase 1.
 
-5. Update PHASE_0_STATUS_AND_EVIDENCE.md with the final status:
-   “Technically ready for approval; formal Phase 0 closure is pending manual repository controls and stakeholder approvals.”
+5. Production-code changes are allowed only when a test reveals a genuine defect. Document any such defect and keep the fix minimal and backward compatible.
 
-6. Do not make additional runtime changes, do not start Phase 1, and do not mark the PR ready or merge it.
+6. Re-run:
+   - the full backend suite with branch coverage if supported;
+   - the offline golden baseline;
+   - the live 25-question golden baseline;
+   - all frontend tests;
+   - frontend lint and build;
+   - git diff --check.
 
-At the end, provide:
-- the exact GitHub repository-settings steps;
-- the required check names;
-- the stakeholder approval table;
-- the PR evidence checklist;
-- the remaining actions required before Phase 0 can be formally closed.
+7. Update the Phase 0 status and PR evidence with:
+   - coverage before and after;
+   - module-level coverage summary;
+   - exact tests added;
+   - commands and results;
+   - any uncovered lines intentionally remaining and why.
+
+8. Confirm that requirements.txt and pyproject.toml remain aligned and that no secrets, local paths, generated artifacts, or unrelated files were added.
+
+9. Keep the PR in draft. Do not merge it and do not claim formal Phase 0 closure because repository rulesets, exact required GitHub Checks, evidence attachment, and stakeholder approvals remain manual blockers.
+
+10. Inspect the uncommitted COPILOT_AGENT_EXECUTION_PROMPT.md change. Do not include it unless it is genuinely required for Phase 0 and contains no unrelated changes; otherwise restore or leave it explicitly excluded.
+
+At the end report:
+- coverage before and after;
+- tests added by module;
+- backend/frontend/golden validation results;
+- production defects fixed, if any;
+- final changed-file count;
+- remaining manual blockers;
+- whether Phase 0 is technically eligible for approval.
