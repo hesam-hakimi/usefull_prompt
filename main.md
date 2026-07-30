@@ -1,79 +1,224 @@
-## Mandatory correction — Test workspace isolation
+این مشکل با دستور «ادامه بده» حل نمی‌شود؛ خود Validator و Guarded Writer اکستنشن باید اصلاح شوند. پرامپت زیر را در Agent Mode و داخل ریپوی کد Extension اجرا کن، نه داخل ریپوی etl-acz0004-cd-renewal.
 
-A confirmed bug exists in the current test setup:
+Fix the ETL extension’s guarded validation and write flow for onboarding artifacts without weakening or bypassing any guardrail.
 
-When tests run, generated ETL agents are written into the extension source repository’s `.github/agents/**` directory.
+Target Resolution
 
-This must be fixed without disabling end-user agent generation.
+Target type: extension-source
 
-### Required behavior
+The target is the extension implementation responsible for:
 
-* Tests that verify `/workflow create` must still generate real ETL agent files.
-* Those files must be generated only inside an isolated temporary consumer ETL workspace.
-* No unit, integration, evaluation, or VS Code extension test may write generated assets into the extension source repository.
+* etl_validate_artifacts;
+* etl_write_to_workspace;
+* onboarding preview, selection, approval, and writing;
+* ADLS root validation;
+* artifact-type classification.
 
-### Test workspace rules
+Do not directly edit the consumer ETL repository’s generated files.
 
-1. Create a unique temporary workspace for every write-capable test, for example using `fs.mkdtemp()` under the operating system’s temporary directory.
+Do not modify:
 
-2. Populate that workspace with only the minimum ETL fixture files required by the test.
+* extension-maintainer agents under .github/agents/**;
+* maintainer prompts or instructions under .github/**;
+* existing consumer job or environment configuration files;
+* existing user-managed assets.
 
-3. Pass its path explicitly as `targetWorkspaceRoot`.
+Use isolated temporary consumer workspaces for all write-capable tests.
 
-4. Do not use any of the following as a test output destination:
+Confirmed problem
 
-   * `process.cwd()`;
-   * repository root;
-   * extension development path;
-   * extension installation path;
-   * `vscode.workspace.workspaceFolders[0]` without explicit fixture validation.
+The onboarding artifact is complete and the user explicitly selected and approved its creation, but the guarded writer blocks the write with these errors:
 
-5. Preview tests must not write any files.
+Onboarding artifact generated without user selection
+env_conf/dev/env_conf_tdous_dev.yaml:
+adls.destination.root still has a placeholder value
+env_conf/dev/env_conf_tdous_dev.yaml:
+adls.source.root still has a placeholder value
 
-6. Create/write tests may write only inside the temporary fixture.
+These failures expose two separate bugs.
 
-7. Audit, repair, and upgrade tests must operate only on managed assets inside the fixture.
+Bug 1 — Valid composed ADLS roots are rejected
 
-8. Remove the temporary fixture in a `finally`/teardown step, including when the test fails.
+The repository intentionally composes the ADLS roots through shared configuration such as common_config.yaml.
 
-9. Test cleanup must never delete files from the real repository.
+The raw values contain approved substitutions similar to:
 
-### VS Code integration tests
+${source.storageaccount}
+${env}
 
-If Extension Development Host tests are used:
+They resolve at runtime to valid abfss://... roots.
 
-* launch the test with a dedicated fixture workspace;
-* keep `extensionDevelopmentPath` separate from the opened test workspace;
-* never open the extension source repository as the consumer workspace for write tests;
-* explicitly verify that the resolved consumer target is not equal to `extensionDevelopmentPath`.
+The existing on-disk job and environment configurations already use this approved composition pattern. They must remain unchanged.
 
-### Production safety guard
+The validator currently examines the raw string, classifies every ${...} expression as an unresolved placeholder, and incorrectly requires a literal ADLS root.
 
-Add a fail-closed guard to the actual writer—not only to tests.
+Do not fix this by inlining literal ADLS roots or modifying the existing environment configuration.
 
-Before writing generated assets, reject the operation when:
+Bug 2 — User selection and approval are lost
 
-* target root equals the extension source or installation root;
-* target is inside the extension package;
-* target classification is `extension-source` or `unknown`;
-* the resolved output escapes the selected consumer workspace.
+The user explicitly:
 
-The error should clearly say:
+1. selected onboarding creation;
+2. reviewed the rendered onboarding artifact;
+3. approved the exact write;
+4. invoked the guarded writer.
 
-`Generated ETL workflow assets cannot be written into the extension source repository. Select an end-user ETL workspace.`
+However, the writer or validator receives no structured evidence that onboarding was selected and approved. It therefore reports:
 
-### Regression tests
+Onboarding artifact generated without user selection
 
-Add tests proving:
+Do not infer approval from conversational text and do not replace the guard with a hard-coded true.
 
-1. Workflow-create tests generate agents successfully inside a temporary consumer fixture.
-2. The fixture contains the expected `.github/agents/etl-*.agent.md` files.
-3. The extension repository’s `.github/agents/**` remains byte-for-byte unchanged.
-4. Failed tests leave no generated files in the extension repository.
-5. The writer rejects the extension source repository as a target.
-6. Temporary fixtures are cleaned up after success and failure.
-7. Running the complete test suite produces no untracked or modified generated files under the real `.github/**` directory.
+Phase 1 — Root-cause inventory
 
-Add a CI post-test guard that fails when tests modify or create files under the repository’s `.github/**` directory.
+Before editing, locate and report:
 
-Do not fix this by removing agent generation. Fix the incorrectly resolved test workspace and preserve the intended `/workflow create` behavior for end users.
+* the exact source of all three error messages;
+* every caller of the affected validators;
+* the implementation of etl_validate_artifacts;
+* the implementation of etl_write_to_workspace;
+* onboarding artifact classification and schema validation;
+* the preview and approval mechanism;
+* how the exact approved artifact set is passed to the writer;
+* configuration loading, includes, substitution, and composition logic;
+* tests covering placeholder detection and onboarding selection;
+* the smallest coherent set of files to change.
+
+Report the resolved canonical source paths and protected paths before implementation.
+
+Required fix 1 — Semantic ADLS root validation
+
+Replace raw placeholder-string detection with configuration-aware validation.
+
+Classify an ADLS root as one of:
+
+1. literal-resolved
+    A valid literal abfss://... URI.
+2. approved-composed
+    A repository-supported expression that is traceable through approved shared configuration and uses recognized variables.
+3. unresolved
+    An unknown token, missing include, unsupported expression, malformed URI, or value that cannot be traced to an approved composition source.
+
+Accept literal-resolved and approved-composed.
+
+Reject unresolved.
+
+Requirements:
+
+* Use the existing configuration loader/composer when available.
+* Resolve includes and substitutions before determining readiness.
+* Do not use a simple “contains ${” regex as the final validation.
+* Allow only known variables and approved composition paths.
+* Reject arbitrary or misspelled substitutions.
+* Preserve the Databricks compile-check as final runtime evidence where applicable.
+* Return structured validation evidence showing the raw value, composition source, recognized variables, and final classification.
+* Do not modify the existing job or environment files to force validation to pass.
+
+Required fix 2 — Structured selection and approval provenance
+
+Pass structured write context from preview and selection through approval and into the guarded writer.
+
+Use the existing approval framework if one already exists.
+
+The context must identify at least:
+
+* selected workspace root;
+* selected artifact types;
+* stable artifact IDs or destinations;
+* the exact previewed file set;
+* a hash/checksum of the previewed content;
+* approval status or approval reference;
+* generator/version information when available.
+
+The guarded writer must allow onboarding only when:
+
+* onboarding was explicitly selected;
+* the onboarding artifact appeared in the preview;
+* the user approved that exact preview;
+* the content being written still matches the approved checksum;
+* the destination remains inside the selected consumer workspace.
+
+If content, destination, or artifact set changes after approval, require a new preview and approval.
+
+Do not infer selection or approval from the chat transcript.
+
+Required fix 3 — Artifact-aware validation
+
+Do not send onboarding JSON through a validator that only understands job, environment, and include artifacts.
+
+Implement or preserve explicit artifact-type handling:
+
+* job configuration validation;
+* environment configuration validation;
+* include/reference validation;
+* onboarding schema validation;
+* selection and approval validation;
+* workspace containment and ownership validation.
+
+etl_validate_artifacts may remain read-only, but it must not claim that an onboarding artifact was generated without selection when it was called without selection context.
+
+The guarded writer must validate the exact selected write set and its required references immediately before writing.
+
+Compatibility requirements
+
+Preserve all of the following:
+
+* existing valid literal ADLS roots;
+* the repository’s approved shared-composition pattern;
+* detection of genuinely unresolved placeholders;
+* existing job and env artifacts byte-for-byte;
+* preview-first and approval-gated writes;
+* user-managed files;
+* path traversal protection;
+* managed-asset ownership checks;
+* Windows and POSIX path behavior;
+* separation between workspace write, DBFS publishing, and pipeline execution;
+* /workflow create and onboarding generation.
+
+Do not add a manual-write fallback and do not weaken the validator globally.
+
+Required tests
+
+Add deterministic tests proving:
+
+1. A literal abfss://... root passes.
+2. The existing approved common_config.yaml composition passes without modifying the env file.
+3. An unknown substitution token fails.
+4. A missing composition include fails.
+5. A malformed resolved ADLS URI fails.
+6. An unselected onboarding artifact is rejected.
+7. A selected but unapproved onboarding artifact is rejected.
+8. A selected, previewed, and approved onboarding artifact passes.
+9. Content changed after approval is rejected.
+10. Destination changed after approval is rejected.
+11. An exact approved onboarding JSON is written successfully.
+12. Existing job and env files remain byte-for-byte unchanged.
+13. A path outside the selected workspace is rejected.
+14. Tests write only inside isolated temporary consumer workspaces.
+15. The extension source repository’s .github/** remains unchanged.
+16. Tests pass on Windows-compatible Node path handling.
+17. The packaged VSIX contains the corrected implementation.
+
+Use temporary fixtures that reproduce the current shared-composition pattern. Do not run write tests against the real consumer repository.
+
+Acceptance criteria
+
+The change is complete only when:
+
+* the existing composed ADLS roots are classified as valid;
+* truly unresolved placeholders still fail;
+* explicit onboarding selection and approval reach the guarded writer;
+* the exact approved onboarding JSON can be written successfully;
+* no existing job or env configuration is rewritten;
+* DBFS publishing and pipeline execution remain separate approval-gated operations;
+* all affected unit, integration, packaging, and VSIX-content tests pass.
+
+The final report must include:
+
+* root cause for each of the three original errors;
+* exact files and functions changed;
+* before/after validation flow;
+* tests executed and results;
+* compatibility impact;
+* remaining limitations;
+* explicit confirmation that no maintainer agent or consumer configuration was modified.
