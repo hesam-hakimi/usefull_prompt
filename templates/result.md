@@ -4,6 +4,15 @@
 
 `done / plan-ready / blocked`
 
+## Target resolution
+
+- Target type:
+- Workspace root:
+- Canonical source:
+- Generated destination:
+- Protected paths kept unchanged:
+- Evidence:
+
 ## Outcome
 
 `[What changed or what is ready from the user's perspective]`
@@ -19,6 +28,7 @@
 - Preserved:
 - Intentionally changed:
 - Consumers checked:
+- Operating systems checked:
 
 ## Validation
 

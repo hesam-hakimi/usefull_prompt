@@ -1,19 +1,23 @@
 # Repository-wide Copilot Instructions
 
-Before acting, read `AGENTS.md` and the relevant sections of:
+This repository’s `.github/**` directory is the maintainer control plane. It is not the source of agents generated for end users.
 
-- `docs/business-context.md`
-- `docs/system-map.md`
-- accepted files in `docs/decisions/`
-- `workflow/README.md`
+Before acting, read:
+
+- `AGENTS.md`;
+- `workflow/targets.yml`;
+- `workflow/README.md`;
+- relevant business and system documentation.
 
 Rules:
 
-1. Do not guess business rules, schemas, identifiers, runtime state, or acceptance criteria.
-2. Preserve existing behavior unless the user explicitly requests a change.
-3. Find affected callers, contracts, and tests before modifying shared behavior.
-4. Plan first; implement only within the user's authorization and risk gates.
-5. Keep diffs narrow and separate unrelated cleanup.
-6. Validate the exact changed artifacts and report checks that were not run.
-7. Treat missing evidence or unavailable tools as blockers, not permission to bypass safeguards.
-8. Finish with the output contract in `templates/result.md`.
+1. Resolve the target type before planning or editing.
+2. Treat an unqualified “agent” request as an extension-produced agent request.
+3. Change product agents in `resources/copilot/agents/**`, not in the extension repository’s `.github/agents/**`.
+4. Edit `.github/**` only when the user explicitly requests a change to the repository’s maintainer workflow.
+5. Never edit generated consumer output directly. Change its canonical source or generator and regenerate it.
+6. Preserve `@etl /workflow create`: it may generate managed ETL assets in an explicitly selected consumer workspace after preview, validation, and approval.
+7. Existing unmanaged consumer files must remain untouched.
+8. Tests must generate assets only in isolated temporary workspaces.
+9. Block writes targeting the extension source, extension installation directory, unknown targets, or paths outside the selected workspace.
+10. Report exact validation evidence and skipped checks using `templates/result.md`.

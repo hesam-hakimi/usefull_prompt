@@ -10,13 +10,19 @@ Copy this template into Copilot Chat or invoke `/build` and provide the same inf
 
 `[What user or business problem does it solve?]`
 
+## Target
+
+`extension-produced agent / maintainer workflow / runtime generator / consumer output`
+
+If omitted, an unqualified “agent” request means `extension-produced agent`.
+
 ## Acceptance criteria
 
 - `[Observable result]`
 
 ## Constraints
 
-- `[Compatibility, technology, performance, security, deadline, or process constraint]`
+- `[Compatibility, technology, operating system, performance, security, deadline, or process constraint]`
 
 ## Out of scope
 

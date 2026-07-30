@@ -17,5 +17,15 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Validate workflow contract
-        run: ./scripts/validate-workflow.sh
+        run: node scripts/validate-workflow.mjs
+
+      # In an extension repository, keep this step after all unit,
+      # integration, evaluation, packaging, and VSIX-content tests.
+      - name: Ensure tests did not modify the maintainer control plane
+        run: node scripts/assert-control-plane-clean.mjs

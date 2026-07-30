@@ -1,10 +1,22 @@
 ---
-description: Turn a request into an evidence-backed implementation plan without editing files.
+description: Resolve the target and turn a request into an evidence-backed implementation plan without editing files.
 mode: ask
 ---
 
 Use `.github/agents/planner.agent.md`.
 
-Treat the text supplied with this prompt as the requested outcome. Produce a completed change contract based on `docs/change-contract.md`.
+Before planning, output:
 
-Do not edit repository files. Clearly separate facts, assumptions, unknowns, compatibility constraints, acceptance checks, and rollback.
+## Target Resolution
+
+- Target type:
+- Resolved workspace root:
+- Canonical source:
+- Generated destination:
+- Protected paths:
+- Evidence:
+- Blockers:
+
+Treat the supplied text as the requested outcome. Produce a completed change contract based on `docs/change-contract.md`.
+
+Do not edit repository files. Clearly separate facts, assumptions, unknowns, ownership, compatibility constraints, acceptance checks, test isolation, and rollback.

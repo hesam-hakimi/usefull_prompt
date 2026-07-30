@@ -4,7 +4,7 @@ This file is the canonical contract for all GitHub Copilot agents working in thi
 
 ## Mission
 
-Turn user intent into the smallest correct change while preserving established business behavior, public contracts, and operational safety.
+Turn user intent into the smallest correct change while preserving established business behavior, public contracts, asset ownership, and operational safety.
 
 Natural language is an interface, not permission to guess. Agents must ground decisions in explicit user instructions, accepted business context, architecture decisions, current contracts, tests, and repository evidence.
 
@@ -15,23 +15,64 @@ Natural language is an interface, not permission to guess. Agents must ground de
 Read only what is relevant to the current request, in this order:
 
 1. The user's current, explicit instruction.
-2. Accepted rules and invariants in `docs/business-context.md`.
-3. Accepted decisions in `docs/decisions/`.
-4. Public contracts, schemas, and compatibility notes in `docs/system-map.md`.
-5. Existing tests and observable behavior.
-6. Implementation details.
+2. Asset ownership and target policy in `workflow/targets.yml`.
+3. Accepted rules and invariants in `docs/business-context.md`.
+4. Accepted decisions in `docs/decisions/`.
+5. Public contracts, schemas, and compatibility notes in `docs/system-map.md`.
+6. Existing tests and observable behavior.
+7. Implementation details.
 
 If two sources conflict, stop and surface the conflict. Do not silently choose the most convenient source.
 
 Blank template fields and missing documentation mean **unknown**, not permission to infer.
 
+## Asset ownership and target resolution
+
+Relative paths alone do not determine ownership. Always identify which workspace owns the path.
+
+| Scope | Canonical location | Policy |
+| --- | --- | --- |
+| Extension maintainer control plane | `<extension-repo>/.github/**` and `AGENTS.md` | Protected; edit only when explicitly requested |
+| Packaged product source | `resources/copilot/**` | Canonical source for extension-delivered agents, prompts, skills, instructions, and knowledge |
+| Runtime generation logic | `src/customization/**` | Creates, audits, repairs, and upgrades managed consumer assets |
+| Consumer-generated output | `<consumer-workspace>/.github/**` | Generated only after preview, validation, and approval |
+| Test output | Unique temporary consumer workspace | The only permitted generated-output location during tests |
+
+Before planning or editing an agent, prompt, instruction, workflow, or generated asset, report:
+
+- target type;
+- resolved workspace root;
+- canonical source;
+- generated destination, if applicable;
+- protected paths that will remain untouched;
+- evidence and blockers.
+
+Allowed target types:
+
+- `extension-source`;
+- `consumer-etl-workspace`;
+- `temporary-test-workspace`;
+- `unknown`.
+
+If the user says “agent” without qualification, interpret it as an extension-produced agent. Resolve its source under `resources/copilot/agents/**`.
+
+Do not modify `<extension-repo>/.github/agents/**` unless the user explicitly asks to change a maintainer agent or repository-development workflow.
+
+Generated consumer files are not source files. Modify their canonical template or generator, then regenerate and validate them.
+
+`@etl /workflow create` must continue generating managed ETL agents under the selected consumer workspace’s `.github/agents/**`, but only after preview and explicit approval.
+
+Tests must generate assets only inside isolated temporary consumer workspaces. They must never use the extension repository, `process.cwd()`, or the extension installation directory as an implicit destination.
+
+If the target is `extension-source`, `unknown`, or outside the selected workspace for a generated-output operation, stop with `BLOCKED`.
+
 ## Workflow states
 
 Every task moves through these states:
 
-`INTAKE → CONTEXT_READY → PLAN_READY → IMPLEMENTING → IMPLEMENTED → VERIFIED → DONE`
+`INTAKE → TARGET_RESOLVED → CONTEXT_READY → PLAN_READY → IMPLEMENTING → IMPLEMENTED → VERIFIED → DONE`
 
-At any state, use `BLOCKED` when required evidence, authority, tooling, or validation is missing.
+At any state, use `BLOCKED` when required evidence, authority, tooling, target resolution, or validation is missing.
 
 Follow `workflow/README.md` for the phase contract.
 
@@ -45,7 +86,8 @@ Extract these fields from the user's request:
 - constraints;
 - explicitly out-of-scope work;
 - relevant files, components, or examples;
-- requested mode: plan, implement, verify, or explain.
+- requested mode: plan, implement, verify, or explain;
+- requested target, when explicitly provided.
 
 Ask only focused questions that materially affect correctness. Do not make the user restate information already available.
 
@@ -68,11 +110,12 @@ When the request is ambiguous about mutation, return a plan and wait.
 
 Before editing:
 
-1. Identify the current behavior and the desired behavior.
-2. Locate affected callers, public contracts, and tests.
-3. Record what must remain unchanged.
-4. Classify the risk and blast radius.
-5. For non-trivial work, complete `docs/change-contract.md`.
+1. Resolve the target and canonical source.
+2. Identify the current behavior and the desired behavior.
+3. Locate affected callers, public contracts, manifests, writers, and tests.
+4. Record what must remain unchanged, including protected control-plane paths.
+5. Classify the risk and blast radius.
+6. For non-trivial work, complete `docs/change-contract.md`.
 
 During implementation:
 
@@ -82,14 +125,18 @@ During implementation:
 - do not delete unfamiliar code merely because it looks unused;
 - add or update tests for changed behavior;
 - prefer deterministic code and validation over prompt-only enforcement;
-- keep secrets and customer-specific values out of prompts, logs, examples, and generated files.
+- keep secrets and customer-specific values out of prompts, logs, examples, and generated files;
+- never treat every consumer file under `.github/**` as extension-owned;
+- use managed-asset identity and checksums when auditing, repairing, or upgrading generated assets.
 
 Before completion:
 
 - inspect the exact diff;
+- confirm the resolved target did not change during implementation;
 - run the smallest relevant checks first, then broader checks when available;
 - verify acceptance criteria one by one;
 - check backward compatibility and adjacent critical paths;
+- confirm tests did not modify the extension repository’s `.github/**`;
 - distinguish verified facts from assumptions;
 - never claim a check passed if it was not run.
 
@@ -103,18 +150,19 @@ For a behavior change, an agent must do at least one of the following:
 - add a characterization test before changing the behavior;
 - document why a test cannot be created and obtain explicit approval for the risk.
 
-A passing test suite is necessary evidence, not proof that the requested behavior is correct. The verifier must also compare the implementation with the request and business invariants.
+A passing test suite is necessary evidence, not proof that the requested behavior is correct. The verifier must also compare the implementation with the request, ownership boundaries, and business invariants.
 
 ## Output contract
 
 Every completed task must return:
 
 1. **Status** — `done`, `blocked`, or `plan-ready`.
-2. **Outcome** — what changed from the user's perspective.
-3. **Files** — created, changed, deleted, or intentionally untouched.
-4. **Compatibility** — preserved contracts and intentional behavior changes.
-5. **Validation** — exact checks run and their results.
-6. **Risks** — remaining uncertainty, skipped checks, or follow-up work.
+2. **Target resolution** — target type, workspace root, canonical source, destination, and protected paths.
+3. **Outcome** — what changed from the user's perspective.
+4. **Files** — created, changed, deleted, or intentionally untouched.
+5. **Compatibility** — preserved contracts and intentional behavior changes.
+6. **Validation** — exact checks run and their results.
+7. **Risks** — remaining uncertainty, skipped checks, or follow-up work.
 
 Use `templates/result.md` as the detailed format. Keep the answer concise, but never omit material risk.
 
@@ -124,10 +172,11 @@ Stop and report a blocker when:
 
 - a required business rule or acceptance criterion is unknown;
 - the requested change conflicts with an accepted invariant;
-- the exact target cannot be identified safely;
+- the exact target, workspace root, ownership, or canonical source cannot be identified safely;
+- a generated-output operation resolves to the extension source, installation directory, unknown target, or a path outside the selected workspace;
 - a required tool or dependency is unavailable;
 - validation fails repeatedly without a grounded cause;
 - completing the task would exceed the user's authorization;
 - sensitive data would need to be copied, exposed, or guessed.
 
-Do not work around a stop condition with ad hoc scripts, unrelated rewrites, or weakened validation.
+Do not work around a stop condition with ad hoc scripts, unrelated rewrites, direct edits to generated output, or weakened validation.

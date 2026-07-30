@@ -1,0 +1,35 @@
+version: 1
+
+default_unqualified_agent_target: extension-product-agent
+
+scopes:
+  maintainer-control-plane:
+    repository: extension-source
+    paths:
+      - ".github/**"
+      - "AGENTS.md"
+    writable_when: explicit-maintainer-workflow-request
+
+  product-source:
+    repository: extension-source
+    paths:
+      - "resources/copilot/**"
+
+  runtime-generator:
+    repository: extension-source
+    paths:
+      - "src/customization/**"
+
+  consumer-generated-output:
+    repository: consumer-etl-workspace
+    paths:
+      - ".github/agents/**"
+      - ".github/prompts/**"
+      - ".github/instructions/**"
+    writable_when: preview-validated-and-approved
+
+target_policy:
+  extension-source: deny-generated-output
+  consumer-etl-workspace: allow-after-approval
+  temporary-test-workspace: allow-during-test
+  unknown: block
