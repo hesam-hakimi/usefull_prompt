@@ -1,110 +1,162 @@
+Fix the target-resolution and asset-ownership behavior for workflow-generated agents without disabling agent generation.
 
-Implement a strict ownership boundary between repository-maintainer Copilot agents and agent definitions delivered by the extension.
+## Intended product behavior
 
-## Problem
+The existing user-facing workflow must continue to work:
 
-Some extension code currently creates, copies, repairs, upgrades, or otherwise manages files under:
+1. The user installs the Databricks ETL Copilot extension.
+2. The user opens an end-user ETL repository.
+3. The user invokes `@etl /workflow`.
+4. The user selects the create/initialize workflow mode.
+5. The extension previews the ETL Copilot assets.
+6. After explicit approval, the extension creates the required ETL automation agents inside the selected end-user workspace.
 
-`.github/agents/**`
+Do not remove or disable this behavior.
 
-This is incorrect.
+## Three distinct asset scopes
 
-That directory belongs exclusively to the current repository’s maintainer/development workflow. Files there control how GitHub Copilot develops this repository and must never be treated as generated ETL extension output.
+Implement an explicit distinction between these scopes.
 
-Do not modify, move, copy, rename, delete, or use the existing `.github/agents/**` files as templates or product source material.
+### 1. Extension maintainer control plane
 
-## Required target architecture
+Path:
 
-1. `.github/agents/**` is a protected control-plane path.
+`<extension-source-repository>/.github/agents/**`
 
-2. Extension activation, initialization, workflow setup, audit, repair, upgrade, preview, and write operations must never create or modify files there.
+These agents exist only to help develop and maintain the extension itself.
 
-3. Extension-delivered agent definitions must have one canonical packaged source, preferably:
+Rules:
 
-   `resources/copilot/agents/**`
+* Product runtime must never create, repair, upgrade, overwrite, rename, or delete these files.
+* Do not use these files as templates for end-user agents.
+* Do not modify any existing maintainer agents while implementing this task.
+* Running the extension in an Extension Development Host must not cause product assets to be written into the extension source repository.
 
-   If an existing canonical packaged location already exists, use it instead and document why. Do not create duplicate sources of truth.
+### 2. Packaged product templates
 
-4. Agent definitions must be loaded or registered through a supported extension/package mechanism.
+Preferred canonical source:
 
-5. If the platform cannot expose these agents without writing `.github/agents/**`, stop and report that platform constraint. Do not silently fall back to workspace file generation.
+`resources/copilot/agents/**`
 
-6. Existing `.github/agents/**` files in user repositories are user-owned. Never delete or rewrite them automatically.
+Use the existing canonical packaged path if the codebase already has one.
 
-7. Do not generate `.github/agents/**` in either the extension repository or consumer ETL repositories.
+Rules:
 
-8. Optional consumer overlays must remain a separate, explicit, preview-first and approval-gated feature. They must not include agent files unless a future design explicitly reintroduces that capability.
+* These are the source templates shipped inside the VSIX.
+* They are read-only at runtime.
+* There must be one source of truth for each generated ETL agent.
+* Do not duplicate agent bodies across `.github/agents`, prompts, skills, and templates.
+* Verify that the intended templates are included in the VSIX.
 
-## Phase 1 — Find the current behavior
+### 3. Generated end-user assets
 
-Before changing code, locate every path that can create or manage `.github/agents/**`, including:
+Destination:
 
-* asset catalogs;
-* scaffold manifests;
-* workflow initializers;
-* repo-context initializers;
-* preview services;
-* writers;
-* audit, repair, and upgrade services;
-* hard-coded path constants;
-* packaged templates;
-* tests and fixtures;
-* `package.json` contributions;
-* documentation.
+`<selected-end-user-workspace>/.github/agents/**`
 
-First output a short “Target Resolution” report containing:
+These are the ETL agents created by `@etl /workflow`.
 
-* protected control-plane path;
-* currently resolved product-source path;
-* every writer or manifest referencing `.github/agents`;
-* which operations can currently create those files;
-* proposed canonical packaged location;
-* expected files to change.
+Rules:
 
-Do not begin implementation if ownership is still ambiguous.
+* Creation is allowed only in an explicitly resolved end-user ETL workspace.
+* Preview must happen before any write.
+* The user must explicitly approve the write.
+* Only the exact previewed and validated asset set may be written.
+* Generated agent filenames should be namespaced, such as `etl-*.agent.md`.
+* The extension must only audit, repair, or upgrade files that it owns.
+* Existing user-created agents must remain untouched.
+* A filename collision with an unmanaged agent must block the write instead of overwriting it.
 
-## Phase 2 — Correct the implementation
+## Target-resolution requirements
 
-Make the smallest coherent change that:
+Create or update a single target resolver used by preview, initialize, write, audit, repair, and upgrade operations.
 
-* removes `.github/agents/**` from generated workflow asset catalogs and manifests;
-* prevents init, workflow, audit, repair, and upgrade operations from managing agent files;
-* moves only genuine product agent definitions to the packaged canonical source;
-* does not move or copy repository-maintainer agents;
-* updates package registration or runtime loading as required;
-* preserves existing prompt, skill, instruction, and context behavior unless directly affected;
-* keeps preview and write behavior unchanged for legitimate generated assets;
-* treats existing generated agent files as legacy user-owned files and leaves them untouched;
-* optionally reports legacy files as an informational diagnostic, without modifying them.
+The resolver must:
 
-Do not perform unrelated cleanup or refactoring.
+* use the explicitly selected VS Code workspace folder;
+* never use `process.cwd()` as an implicit destination;
+* never derive the destination from the extension installation directory;
+* handle multi-root workspaces by asking the user to select the target;
+* verify that the target is an end-user ETL workspace;
+* block the operation if the resolved target is the extension source repository;
+* block path traversal or any resolved output outside the selected workspace;
+* return a structured target result containing workspace root, target type, evidence, and blockers.
 
-## Required regression protection
+Before preview, report:
 
-Add deterministic tests proving that:
+* target type: `extension-source`, `consumer-etl-workspace`, or `unknown`;
+* resolved workspace root;
+* planned agent destination;
+* evidence used to classify the target;
+* any blocker.
 
-1. Extension activation writes no workspace files.
-2. Repo initialization does not create `.github/agents/**`.
-3. Workflow initialization does not create `.github/agents/**`.
-4. Audit, repair, and upgrade do not modify existing `.github/agents/**`.
-5. Consumer overlay operations do not generate agent files.
-6. Existing user files under `.github/agents/**` remain byte-for-byte unchanged.
-7. Packaged product agent definitions are included in the VSIX.
-8. The supported runtime/package mechanism can find the packaged definitions.
-9. A guard test fails if `.github/agents` is reintroduced into any generated-asset manifest or writer destination.
+Only `consumer-etl-workspace` may receive generated ETL agents.
 
-Run the relevant unit tests, evaluation checks, package verification, and VSIX-content verification.
+## Asset ownership
 
-## Acceptance criteria
+Use the existing managed-asset manifest machinery if available.
 
-The change is complete only when:
+For every generated agent, record:
 
-* no extension-owned runtime path writes `.github/agents/**`;
-* `.github/agents/**` is documented as maintainer-owned and protected;
-* product agent definitions have exactly one canonical packaged source;
-* legacy files are not deleted;
-* all affected tests pass;
-* the VSIX contains the intended packaged assets;
-* the final response lists the root cause, changed files, tests executed, compatibility impact, and any remaining platform limitation.
+* stable asset ID;
+* relative destination;
+* template/source ID;
+* generator version;
+* checksum;
+* ownership by Databricks ETL Copilot.
 
-Do not claim completion based only on documentation changes. Verify the actual writer, manifests, generated output, and packaged VSIX contents.
+Do not add unsupported frontmatter fields to GitHub Copilot agent files.
+
+Audit, repair, and upgrade must operate from the manifest and known asset IDs—not by treating every file under `.github/agents/**` as extension-owned.
+
+If ownership of an existing file cannot be proven, leave it unchanged and report it as unmanaged.
+
+## Preserve existing functionality
+
+Do not:
+
+* remove generated ETL agents from `/workflow create`;
+* delete existing agent templates;
+* delete existing consumer agents;
+* modify extension-maintainer agents;
+* disable workflow initialization;
+* redirect all generated agents away from `.github/agents`;
+* perform unrelated refactoring.
+
+The required change is ownership and target separation, not removal of the agent feature.
+
+## Tests
+
+Add deterministic tests proving:
+
+1. Extension activation writes no files.
+2. `/workflow` preview writes no files.
+3. `/workflow create` creates expected agents in a selected consumer ETL workspace after approval.
+4. Generated files are placed under the consumer workspace’s `.github/agents`.
+5. Running against the extension source repository is blocked.
+6. Existing extension-maintainer agents remain byte-for-byte unchanged.
+7. Existing unmanaged consumer agents remain unchanged.
+8. Managed consumer agents can be audited, repaired, and upgraded.
+9. User-modified managed agents are skipped or require explicit conflict resolution.
+10. Multi-root workspaces require explicit target selection.
+11. Path traversal and output outside the selected workspace are blocked.
+12. The VSIX contains the packaged agent templates.
+13. The same asset set shown in preview is validated and written.
+
+## Implementation process
+
+Before editing, provide a short Target Resolution and Writer Inventory showing:
+
+* all current writers of `.github/agents/**`;
+* template sources;
+* destination-resolution logic;
+* asset manifests;
+* affected tests;
+* the minimal proposed change.
+
+Then implement the smallest coherent fix and run unit, workflow, packaging, and VSIX-content verification tests.
+
+The final report must explicitly confirm both of these statements:
+
+* Extension-maintainer agents were not modified.
+* End-user ETL agents are still generated successfully through `@etl /workflow create`.
