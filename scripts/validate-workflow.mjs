@@ -63,8 +63,12 @@ const requiredOrchestratorRules = [
   "agents:",
   "- Planner",
   "- Verifier",
+  "Immediately emit the required `## Target Resolution` report",
   "Invoke `Planner` as a subagent",
   "Invoke `Verifier` as a fresh subagent",
+  "A new mutating or operational request",
+  "INSTALLED_NOT_ACTIVATED",
+  "POST_INSTALL_VERIFIED",
   "Do not perform or simulate final verification yourself",
   "maximum of two remediation cycles",
   "If the agent tool or either required subagent is unavailable, return `BLOCKED`",
@@ -79,10 +83,14 @@ const requiredVerifierRules = [
 ];
 
 const requiredBuildRules = [
+  "start a new task for every new mutating or operational request",
+  "emit the complete `## Target Resolution` report before any delegation",
   "invoke `Planner` as an actual subagent",
   "invoke `Verifier` as a fresh, independent subagent",
   "Do not role-play or simulate Planner or Verifier",
   "return `DONE` only after `VERIFIED`",
+  "INSTALLED_NOT_ACTIVATED",
+  "POST_INSTALL_VERIFIED",
 ];
 
 async function read(relativePath) {
@@ -113,6 +121,16 @@ for (const relativePath of requiredFiles) {
 
 const agentContract = await read("AGENTS.md");
 assertContains(agentContract, requiredAgentRules, "AGENTS.md");
+assertContains(
+  agentContract,
+  [
+    "Before moving beyond `TARGET_RESOLVED`, emit a visible target-resolution report",
+    "A new mutating or operational request starts a new task at `INTAKE`",
+    "INSTALLED_NOT_ACTIVATED",
+    "POST_INSTALL_VERIFIED",
+  ],
+  "AGENTS.md",
+);
 
 const targetContract = await read("workflow/targets.yml");
 assertContains(targetContract, requiredTargetRules, "workflow/targets.yml");
@@ -141,6 +159,11 @@ assertContains(
     "## Automatic subagent orchestration",
     "Orchestrator → Planner subagent → Orchestrator implementation → fresh Verifier subagent → Result",
     "The agent tool and the `agents` allowlist are the required automatic delegation mechanism.",
+    "## Task boundaries and re-entry",
+    "A new mutating or operational request restarts the state machine at `INTAKE`",
+    "Planner invocation and all mutating or operational actions are forbidden until this report is visible.",
+    "INSTALLED_NOT_ACTIVATED",
+    "POST_INSTALL_VERIFIED",
   ],
   "workflow/README.md",
 );

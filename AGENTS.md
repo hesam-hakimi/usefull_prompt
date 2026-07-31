@@ -74,6 +74,29 @@ Every task moves through these states:
 
 At any state, use `BLOCKED` when required evidence, authority, tooling, target resolution, or validation is missing.
 
+Before moving beyond `TARGET_RESOLVED`, emit a visible target-resolution report containing:
+
+- task ID;
+- request class;
+- target type;
+- resolved workspace root;
+- canonical source;
+- generated destination, if applicable;
+- protected paths;
+- evidence and blockers.
+
+Do not invoke Planner, edit files, run a write-capable tool, build, package, install, publish, or deploy before this report is emitted.
+
+`DONE` is terminal only for the exact task, request contract, diff, and artifacts that were verified. For every later user message, classify it as one of:
+
+- same-task read-only clarification;
+- new read-only request;
+- new mutating or operational request.
+
+A new mutating or operational request starts a new task at `INTAKE`, even when it appears in the same chat or after a restore checkpoint. This includes version bumps, new edits, build, package, install, publish, deploy, repair, upgrade, and any action that can change files, installed software, external state, or produced artifacts. Do not reuse a previous task's `TARGET_RESOLVED`, `PLAN_READY`, `VERIFIED`, approval, diff, or test evidence.
+
+Package verification and successful installation do not prove that the newly installed extension is active. Report `INSTALLED_NOT_ACTIVATED` until the relevant host is reloaded or restarted. Report `POST_INSTALL_VERIFIED` only after a live smoke check runs against the newly activated version.
+
 Follow `workflow/README.md` for the phase contract.
 
 ## Intake contract

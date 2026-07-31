@@ -21,7 +21,7 @@ Rules:
 
 1. Planner and Verifier must be invoked through the agent tool as actual subagents.
 2. Orchestrator must not role-play, simulate, or replace either subagent.
-3. Verifier receives factual inputs: the original request, acceptance criteria, resolved target, protected paths, exact diff, and test evidence.
+3. Verifier receives factual inputs: the original request, acceptance criteria, resolved target, protected paths, exact diff or operation manifest, and test evidence.
 4. `VERIFIED` advances to `DONE`.
 5. `CHANGES_REQUIRED` returns control to Orchestrator for the smallest grounded correction, followed by a new Verifier subagent.
 6. A maximum of two remediation cycles is allowed; unresolved findings then produce `BLOCKED`.
@@ -29,6 +29,20 @@ Rules:
 8. If subagent invocation is unavailable, the workflow fails closed with `BLOCKED`.
 
 The `handoffs` frontmatter feature is not the automation mechanism for `/build`: handoff buttons are user-guided transitions. The agent tool and the `agents` allowlist are the required automatic delegation mechanism.
+
+## Task boundaries and re-entry
+
+Each task has its own request contract, task ID, target resolution, plan, approval, diff or operation manifest, evidence, verification, and result.
+
+`DONE` is terminal for that exact task only. Before acting on any later message, Orchestrator classifies it as:
+
+- same-task read-only clarification;
+- new read-only request;
+- new mutating or operational request.
+
+A new mutating or operational request restarts the state machine at `INTAKE`, even in the same chat or after a restore checkpoint. Examples include a version bump, edit, build, package, install, publish, deploy, repair, or upgrade. The new task must emit its own `TARGET_RESOLVED` report, invoke a new Planner, perform only its bounded action, and invoke a fresh Verifier. Evidence, approval, and `VERIFIED` status from a completed task cannot be reused.
+
+Package verification and installation success prove only artifact and installation state. Until the extension host is reloaded or restarted, report `INSTALLED_NOT_ACTIVATED`. Only a live smoke check against the newly activated version may report `POST_INSTALL_VERIFIED`.
 
 ## Phase 1 — Intake
 
@@ -47,6 +61,8 @@ Before planning or implementation:
 3. resolve the canonical source and intended destination;
 4. identify ownership evidence and protected paths;
 5. block ambiguous or unsafe targets.
+
+Immediately emit a visible report with task ID, request class, target type, workspace root, canonical source, generated destination when applicable, protected paths, evidence, and blockers. Planner invocation and all mutating or operational actions are forbidden until this report is visible.
 
 Output state: `TARGET_RESOLVED` or `BLOCKED`.
 
@@ -97,17 +113,18 @@ Output state: `IMPLEMENTED` or `BLOCKED`.
 
 ## Phase 6 — Verification
 
-Orchestrator must invoke Verifier as a fresh subagent after implementation and relevant checks.
+Orchestrator must invoke Verifier as a fresh subagent after implementation or the bounded operational action and relevant checks.
 
 The Verifier:
 
-1. reviews the exact diff and resolved target;
+1. reviews the exact diff or operation manifest and resolved target;
 2. maps each acceptance criterion to evidence;
 3. runs or inspects relevant tests and contract checks;
 4. verifies ownership boundaries and protected behavior;
 5. confirms write-capable tests used temporary consumer workspaces;
 6. confirms tests left the extension repository’s `.github/**` unchanged;
-7. searches for hidden assumptions, stale docs, skipped errors, path traversal, Windows path issues, and accidental scope.
+7. searches for hidden assumptions, stale docs, skipped errors, path traversal, Windows path issues, and accidental scope;
+8. distinguishes packaged, installed, activated, and live-smoke-verified states.
 
 The Verifier reports findings; it does not silently repair them.
 
