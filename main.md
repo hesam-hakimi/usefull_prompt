@@ -6,11 +6,18 @@ Use these exact literals:
 4. schedule_type: adhoc
 5. task_cluster_type: Large
 6. active_flag: 1
-7. Path version segment: no version segment
+7. Version segment in paths: none
 
-Destination:
+Keep the literal {env_dbfs} token unchanged.
+
+Render the final JSON and the exact one-file write manifest for review.
+
+The only permitted write is:
 cd_renewal/job_onboarding/cd_renewal.json
 
-Keep {env_dbfs} exactly as documented.
+Do not modify:
+- cd_renewal/job_conf/conf/cd_renewal.json
+- env_conf/dev/env_conf_tdous_dev.yaml
+- env_conf/conf/common_config.yaml
 
-Render the final JSON and exact one-file write manifest for review. Do not call the write tool until I explicitly approve that final preview.
+Do not call the write tool until I explicitly approve the final preview.
