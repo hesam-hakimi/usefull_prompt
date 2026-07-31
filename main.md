@@ -1,12 +1,16 @@
-Do not call the write tool yet.
+Use these exact literals:
 
-This preview does not match the values confirmed in the previous test. Reconcile every onboarding field against explicit user input and repository evidence. Do not use conversation memory as authoritative evidence.
+1. job_id: acz0004_cd_renewal
+2. job_name: acz0004_cd_renewal
+3. job_pattern: DateMaker
+4. schedule_type: adhoc
+5. task_cluster_type: Large
+6. active_flag: 1
+7. Path version segment: no version segment
 
-The intended destination is:
+Destination:
 cd_renewal/job_onboarding/cd_renewal.json
 
-Keep the existing job and environment configurations read-only.
+Keep {env_dbfs} exactly as documented.
 
-Explain the evidence for job_id, job_name, job_pattern, schedule_type, task_cluster_type, active_flag, and the {env_dbfs} token. Highlight every value that differs from the previously confirmed values and ask me to approve the final literals.
-
-Then show a final write manifest containing exactly one create operation for the onboarding JSON and zero modifications to job_conf or env_conf. Do not write anything yet.
+Render the final JSON and exact one-file write manifest for review. Do not call the write tool until I explicitly approve that final preview.
