@@ -1,154 +1,610 @@
-# Request-to-Result Workflow
+# Agent Workflow Contract
 
-This is the canonical execution flow for Copilot agents.
+This directory defines the repository’s mandatory task lifecycle, target policy, handoff rules, and completion gates.
 
-## Modes
+The workflow applies to all maintainer agents operating in this repository.
 
-| Mode | Entry point | Expected result |
-| --- | --- | --- |
-| Build | `/build` or an explicit “implement/fix/build” request | Target resolution, delegated plan, bounded implementation, independent subagent verification, result |
-| Plan | `/plan-change` or an ambiguous request | Target resolution and evidence-backed plan; no edits |
-| Verify | `/verify-change` | Independent assessment of the target and current diff |
-| Explain | Direct question | Evidence-backed explanation; no edits |
+## Primary lifecycle
 
-## Automatic subagent orchestration
+Every task follows this state machine:
 
-`/build` uses Orchestrator as the parent agent and runs this sequence without requiring the user to switch agents:
+```text
+INTAKE
+  ↓
+TARGET_RESOLVED
+  ↓
+CONTEXT_READY
+  ↓
+PLAN_READY
+  ↓
+IMPLEMENTING
+  ↓
+IMPLEMENTED
+  ↓
+VERIFIED
+  ↓
+DONE
+```
 
-`Orchestrator → Planner subagent → Orchestrator implementation → fresh Verifier subagent → Result`
+At any stage, the task may move to:
+
+```text
+BLOCKED
+```
+
+`BLOCKED` is required when correctness, authorization, target ownership, or validation cannot be established safely.
+
+## Agent topology
+
+The default automatic workflow is:
+
+```text
+User request
+    ↓
+Orchestrator
+    ↓
+Planner
+    ↓
+Orchestrator implementation
+    ↓
+Fresh Verifier
+    ↓
+Orchestrator final response
+```
+
+The user should interact with the Orchestrator.
+
+The user is not expected to switch manually between agents.
+
+## Roles
+
+### Orchestrator
+
+The Orchestrator owns the task lifecycle.
+
+Responsibilities:
+
+- classify the request;
+- resolve target ownership;
+- display the target-resolution report;
+- gather relevant context;
+- delegate planning;
+- review and narrow the plan when necessary;
+- implement the approved scope;
+- run validation;
+- delegate independent verification;
+- correct verified defects;
+- return the final result.
+
+The Orchestrator must not claim independent verification unless a fresh Verifier actually performed it.
+
+### Planner
+
+The Planner is read-only.
+
+Responsibilities:
+
+- evaluate the request and evidence;
+- identify current and desired behavior;
+- define scope and exclusions;
+- identify affected contracts and tests;
+- identify protected paths;
+- propose the smallest coherent plan;
+- identify risks and blockers.
+
+The Planner returns:
+
+```text
+PLAN_READY
+```
+
+or:
+
+```text
+PLAN_BLOCKED
+```
+
+The Planner does not edit files, run destructive commands, publish, deploy, install, or approve writes.
+
+### Verifier
+
+The Verifier is fresh and read-only.
+
+Responsibilities:
+
+- independently inspect target resolution;
+- compare implementation with the original request;
+- inspect exact changed files;
+- inspect compatibility and protected paths;
+- review test evidence;
+- reproduce relevant validation when possible;
+- separate pre-existing failures from new regressions;
+- reject unsupported completion claims.
+
+The Verifier returns:
+
+```text
+VERIFIED
+```
+
+```text
+CHANGES_REQUIRED
+```
+
+or:
+
+```text
+BLOCKED
+```
+
+## State contract
+
+### `INTAKE`
+
+Entry condition:
+
+- a new user request has arrived.
+
+Required work:
+
+- assign a task ID;
+- classify the request;
+- extract outcome, acceptance criteria, constraints, exclusions, and target hints;
+- determine whether it is read-only, mutating, or operational.
+
+Exit condition:
+
+- the request is sufficiently understood to resolve its target.
+
+A new mutating or operational user message always begins a new task at `INTAKE`.
+
+Examples:
+
+- “now build it”;
+- “bump the version”;
+- “install the VSIX”;
+- “publish it”;
+- “make one more change”;
+- “repair the generated agents”;
+- “upgrade the workflow assets”.
+
+Previous approvals and verification evidence do not carry into the new task.
+
+### `TARGET_RESOLVED`
+
+Required work:
+
+- classify the target;
+- resolve the workspace root;
+- identify canonical source;
+- identify generated destination;
+- enumerate protected paths;
+- record evidence and blockers.
+
+Allowed target types:
+
+```text
+extension-source
+consumer-etl-workspace
+temporary-test-workspace
+unknown
+```
+
+Mandatory visible report:
+
+```text
+Task ID:
+Request class:
+Target type:
+Workspace root:
+Canonical source:
+Generated destination:
+Protected paths:
+Evidence:
+Blockers:
+```
+
+Do not invoke Planner or edit files before emitting this report.
+
+Exit condition:
+
+- target ownership is explicit and safe.
+
+If target type is `unknown`, stop with `BLOCKED`.
+
+### `CONTEXT_READY`
+
+Required work:
+
+- inspect only relevant files;
+- identify current behavior;
+- identify desired behavior;
+- locate affected callers, manifests, writers, contracts, and tests;
+- record invariants and protected paths;
+- identify conflicts in sources of truth.
+
+Do not search unrelated folders to accumulate context.
+
+When operating in a consumer workspace:
+
+- resolve relative user paths against that workspace;
+- do not search extension-source examples as fallback;
+- do not request permission to read unrelated external directories;
+- block if the requested consumer input is missing.
+
+Exit condition:
+
+- sufficient grounded evidence exists for planning.
+
+### `PLAN_READY`
+
+For non-trivial mutating work, the Orchestrator delegates to Planner.
+
+Planner input must include:
+
+- original request;
+- task ID;
+- target-resolution report;
+- acceptance criteria;
+- relevant evidence;
+- current behavior;
+- desired behavior;
+- protected paths;
+- constraints and exclusions;
+- known blockers.
+
+Planner output must include:
+
+```text
+Status: PLAN_READY | PLAN_BLOCKED
+Current behavior:
+Desired behavior:
+Scope:
+Out of scope:
+Files/components:
+Contracts:
+Tests:
+Risks:
+Implementation sequence:
+Verification contract:
+```
+
+The Orchestrator reviews the plan before implementation.
+
+Exit condition:
+
+- the Orchestrator accepts a bounded plan.
+
+### `IMPLEMENTING`
+
+Required behavior:
+
+- edit only the resolved canonical source;
+- keep the diff narrow;
+- preserve public contracts unless change is required;
+- add or update regression tests;
+- avoid unrelated cleanup;
+- preserve unrelated working-tree changes;
+- keep protected paths untouched.
+
+If implementation evidence invalidates the plan, return to `CONTEXT_READY` or `PLAN_READY`.
+
+### `IMPLEMENTED`
+
+Entry requirements:
+
+- planned change is complete;
+- exact diff has been inspected;
+- relevant targeted checks have run;
+- generated or packaged artifacts have been inspected when applicable;
+- target resolution remains unchanged.
+
+This is not a completion state.
+
+The Orchestrator must now create the verification handoff.
+
+### `VERIFIED`
+
+The Verifier must independently confirm:
+
+1. target and ownership are correct;
+2. requested behavior is implemented;
+3. acceptance criteria are satisfied;
+4. protected paths remain untouched;
+5. compatibility is preserved or intentionally changed;
+6. tests support the result;
+7. pre-existing failures are not misreported as new successes or regressions;
+8. Windows and POSIX behavior is covered where path logic changed;
+9. generated output uses the intended workspace;
+10. no external-directory fallback was introduced.
+
+A Verifier response must use:
+
+```text
+Status: VERIFIED | CHANGES_REQUIRED | BLOCKED
+Target:
+Acceptance criteria:
+Changed files:
+Protected paths:
+Validation reproduced:
+Compatibility:
+Findings:
+Residual risk:
+```
+
+If `CHANGES_REQUIRED`, the task returns to `IMPLEMENTING`.
+
+After corrections, use a fresh verification pass.
+
+### `DONE`
+
+`DONE` is allowed only when:
+
+- the exact task has been verified;
+- all material acceptance criteria pass;
+- risks are reported;
+- files and checks are enumerated;
+- Planner and Verifier outcomes are recorded when required.
+
+`DONE` applies only to the exact task, diff, and artifacts verified.
+
+A later operational request starts again at `INTAKE`.
+
+## Target ownership matrix
+
+| Target class | Canonical source | Destination | Mutation policy |
+| --- | --- | --- | --- |
+| Maintainer workflow | `.github/**`, `AGENTS.md`, `workflow/**` | Extension repository | Only by explicit request |
+| Product Copilot assets | `resources/copilot/**` | VSIX/package | Edit source, then package and verify |
+| Product generation logic | `src/customization/**` | Runtime-generated consumer files | Edit implementation and tests |
+| Consumer generated assets | Packaged templates and generator | `<consumer-workspace>/.github/**` | Preview, validate, approve, then write |
+| Test generated assets | Test fixture source | Temporary workspace | Never write to repository root |
+
+## Generated-agent boundary
+
+The same relative path can have different ownership in different repositories.
+
+```text
+<extension-source>/.github/agents/**
+```
+
+contains maintainer agents.
+
+```text
+<extension-source>/resources/copilot/agents/**
+```
+
+contains product templates shipped by the extension.
+
+```text
+<consumer-workspace>/.github/agents/**
+```
+
+contains managed ETL agents generated for the end user.
 
 Rules:
 
-1. Planner and Verifier must be invoked through the agent tool as actual subagents.
-2. Orchestrator must not role-play, simulate, or replace either subagent.
-3. Verifier receives factual inputs: the original request, acceptance criteria, resolved target, protected paths, exact diff or operation manifest, and test evidence.
-4. `VERIFIED` advances to `DONE`.
-5. `CHANGES_REQUIRED` returns control to Orchestrator for the smallest grounded correction, followed by a new Verifier subagent.
-6. A maximum of two remediation cycles is allowed; unresolved findings then produce `BLOCKED`.
-7. `BLOCKED` stops the workflow.
-8. If subagent invocation is unavailable, the workflow fails closed with `BLOCKED`.
+- changing a product agent means changing its packaged template or generator;
+- changing a maintainer agent requires explicit maintainer-workflow authorization;
+- consumer output is not the canonical source;
+- unmanaged consumer agents must not be overwritten;
+- managed ownership must be proven through stable IDs and manifest evidence.
 
-The `handoffs` frontmatter feature is not the automation mechanism for `/build`: handoff buttons are user-guided transitions. The agent tool and the `agents` allowlist are the required automatic delegation mechanism.
+## Consumer input resolution
 
-## Task boundaries and re-entry
+A consumer-relative file must be resolved as:
 
-Each task has its own request contract, task ID, target resolution, plan, approval, diff or operation manifest, evidence, verification, and result.
+```text
+resolve(selectedWorkspaceRoot, userSuppliedRelativePath)
+```
 
-`DONE` is terminal for that exact task only. Before acting on any later message, Orchestrator classifies it as:
+The resolver must ensure:
 
-- same-task read-only clarification;
-- new read-only request;
-- new mutating or operational request.
+```text
+resolvedPath ∈ selectedWorkspaceRoot
+```
 
-A new mutating or operational request restarts the state machine at `INTAKE`, even in the same chat or after a restore checkpoint. Examples include a version bump, edit, build, package, install, publish, deploy, repair, or upgrade. The new task must emit its own `TARGET_RESOLVED` report, invoke a new Planner, perform only its bounded action, and invoke a fresh Verifier. Evidence, approval, and `VERIFIED` status from a completed task cannot be reused.
+It must not fall back to:
 
-Package verification and installation success prove only artifact and installation state. Until the extension host is reloaded or restarted, report `INSTALLED_NOT_ACTIVATED`. Only a live smoke check against the newly activated version may report `POST_INSTALL_VERIFIED`.
+- extension source;
+- extension installation directory;
+- development fixtures;
+- documentation samples;
+- `process.cwd()`;
+- the first workspace folder without explicit selection in a multi-root workspace.
 
-## Phase 1 — Intake
+If the file is missing, report:
 
-1. Extract goal, value, acceptance criteria, constraints, out-of-scope work, and any explicitly named target.
-2. Classify the mode and risk.
-3. Ask only questions whose answers can change the implementation or safety.
+```text
+BLOCKED: requested consumer input was not found under the selected workspace.
+```
 
-Output state: `INTAKE` or `BLOCKED`.
+Do not ask for broad external-directory access unless the user explicitly selected an external input.
 
-## Phase 2 — Target resolution
+## Test isolation
 
-Before planning or implementation:
+Write-capable tests must:
 
-1. classify the target as `extension-source`, `consumer-etl-workspace`, `temporary-test-workspace`, or `unknown`;
-2. resolve and canonicalize the workspace root;
-3. resolve the canonical source and intended destination;
-4. identify ownership evidence and protected paths;
-5. block ambiguous or unsafe targets.
+1. create a unique temporary directory;
+2. initialize the minimum consumer fixture;
+3. pass the fixture root explicitly;
+4. classify it as `temporary-test-workspace`;
+5. verify containment;
+6. perform writes only inside it;
+7. clean up after success and failure;
+8. confirm repository `.github/**` remains unchanged.
 
-Immediately emit a visible report with task ID, request class, target type, workspace root, canonical source, generated destination when applicable, protected paths, evidence, and blockers. Planner invocation and all mutating or operational actions are forbidden until this report is visible.
+Forbidden test destinations:
 
-Output state: `TARGET_RESOLVED` or `BLOCKED`.
+```text
+process.cwd()
+repository root
+extension development path
+extension installation path
+unvalidated workspaceFolders[0]
+```
 
-An unqualified “agent” request targets an extension-produced agent. It does not authorize changes to maintainer agents under the extension repository’s `.github/agents/**`.
+## Windows compatibility contract
 
-Generated-output operations are allowed only for:
+All path-sensitive changes must be tested on Windows-style and POSIX-style paths.
 
-- an explicitly selected `consumer-etl-workspace`, after preview, validation, and approval; or
-- a unique `temporary-test-workspace` during a write-capable test.
+Required properties:
 
-Use platform APIs for path and temporary-directory handling. Normalize Windows and POSIX paths before comparison and reject traversal outside the selected workspace.
+- separator normalization;
+- drive-letter handling;
+- case-aware or case-insensitive comparison as appropriate;
+- safe containment;
+- no traversal;
+- no cross-drive false containment;
+- spaces in paths;
+- portable serialized manifest paths;
+- temporary-directory cleanup.
 
-## Phase 3 — Context
+Do not compare paths using raw string prefixes.
 
-1. Read the relevant sections of `docs/business-context.md`.
-2. Read the affected parts of `docs/system-map.md`, `workflow/targets.yml`, and accepted ADRs.
-3. Inspect only code, manifests, writers, tests, and contracts needed for the request.
-4. Separate facts, assumptions, and unknowns.
+Unsafe:
 
-Output state: `CONTEXT_READY` or `BLOCKED`.
+```ts
+candidate.startsWith(workspaceRoot)
+```
 
-## Phase 4 — Plan
+Safer conceptual form:
 
-1. Orchestrator invokes Planner as a subagent.
-2. Planner describes current and desired behavior.
-3. Planner identifies callers, contracts, manifests, writers, tests, and blast radius.
-4. Planner records behavior and protected paths that must not change.
-5. Planner chooses the smallest coherent implementation.
-6. Planner defines acceptance checks, test isolation, and rollback/recovery.
+```ts
+const relative = path.relative(workspaceRoot, candidate);
+const contained =
+  relative !== "" &&
+  !relative.startsWith("..") &&
+  !path.isAbsolute(relative);
+```
 
-Use `docs/change-contract.md` for non-trivial work.
+The implementation must also handle equality with the workspace root when equality is valid for the operation.
 
-Output state: `PLAN_READY` or `BLOCKED`.
+## Build and installation lifecycle
 
-## Phase 5 — Implementation
+These are separate states:
 
-Proceed when the user explicitly requested implementation and the risk does not require extra confirmation.
+```text
+SOURCE_VERIFIED
+  → BUILT
+  → PACKAGED
+  → PACKAGE_VERIFIED
+  → INSTALLED_NOT_ACTIVATED
+  → ACTIVATED_NOT_SMOKE_TESTED
+  → POST_INSTALL_VERIFIED
+```
 
-1. Implement the plan without unrelated cleanup.
-2. Change generated products at their canonical source or generator.
-3. Add or update regression coverage.
-4. Keep public interfaces compatible unless the approved plan changes them.
-5. Reassess if the discovered target or blast radius differs from the plan.
+### `BUILT`
 
-Do not remove or disable end-user agent generation. `@etl /workflow create` must retain its preview-first, approval-gated consumer generation behavior.
+Evidence:
 
-Output state: `IMPLEMENTED` or `BLOCKED`.
+- build command;
+- exit code;
+- source version;
+- output path.
 
-## Phase 6 — Verification
+### `PACKAGED`
 
-Orchestrator must invoke Verifier as a fresh subagent after implementation or the bounded operational action and relevant checks.
+Evidence:
 
-The Verifier:
+- package command;
+- produced package path;
+- produced version.
 
-1. reviews the exact diff or operation manifest and resolved target;
-2. maps each acceptance criterion to evidence;
-3. runs or inspects relevant tests and contract checks;
-4. verifies ownership boundaries and protected behavior;
-5. confirms write-capable tests used temporary consumer workspaces;
-6. confirms tests left the extension repository’s `.github/**` unchanged;
-7. searches for hidden assumptions, stale docs, skipped errors, path traversal, Windows path issues, and accidental scope;
-8. distinguishes packaged, installed, activated, and live-smoke-verified states.
+### `PACKAGE_VERIFIED`
 
-The Verifier reports findings; it does not silently repair them.
+Evidence:
 
-Output state: `VERIFIED`, `CHANGES_REQUIRED`, or `BLOCKED`.
+- bundle included;
+- required templates included;
+- forbidden files absent;
+- manifest checks pass.
 
-## Phase 7 — Result
+### `INSTALLED_NOT_ACTIVATED`
 
-Return `templates/result.md` with:
+Installation succeeded, but the running VS Code window may still use the previous extension version.
 
-- target resolution;
-- user-visible outcome;
-- exact file effects;
-- compatibility statement;
-- validation evidence;
-- remaining risk and next action.
+Required user action:
 
-Output state: `DONE`, `PLAN_READY`, or `BLOCKED`.
+```text
+Developer: Reload Window
+```
 
-## Risk guide
+or restart the host.
 
-| Risk | Typical examples | Gate |
-| --- | --- | --- |
-| Low | Docs, isolated internal behavior, test-only change | Explicit implementation request |
-| Medium | Shared component, generator, dependency, or observable behavior | Plan plus regression evidence |
-| High | Auth, secrets, destructive action, persistent schema, public contract removal, deployment | Explicit additional confirmation and recovery plan |
+### `ACTIVATED_NOT_SMOKE_TESTED`
 
-When risk is uncertain, classify upward and explain why.
+The installed version is active, but the changed behavior has not yet been exercised live.
+
+### `POST_INSTALL_VERIFIED`
+
+The activated extension passed a live scenario covering the changed behavior.
+
+Installation alone must never be reported as full product verification.
+
+## Approval boundary
+
+Approval belongs to:
+
+- one task;
+- one preview;
+- one manifest;
+- one workspace;
+- one selected artifact set;
+- one exact content checksum;
+- one operational action.
+
+Approval is invalid if any of these change.
+
+The writer must fail closed when previewed and requested state differ.
+
+## Result format
+
+Use `templates/result.md`.
+
+Minimum final report:
+
+```text
+Status:
+Task ID:
+
+Target resolution:
+- target type
+- workspace root
+- canonical source
+- destination
+- protected paths
+
+Outcome:
+
+Files:
+- created
+- changed
+- deleted
+- untouched
+
+Compatibility:
+
+Validation:
+
+Delegation:
+- Planner
+- Verifier
+
+Risks:
+```
+
+## Stop rather than guess
+
+Use `BLOCKED` when:
+
+- target ownership is unknown;
+- a consumer file is missing and only an external fallback exists;
+- canonical source cannot be found;
+- required business evidence conflicts;
+- the requested operation exceeds authorization;
+- independent verification cannot be performed;
+- a generated destination escapes the selected workspace;
+- validation cannot establish safety.
+
+A blocker is a valid workflow outcome. Fabricated certainty is not.
