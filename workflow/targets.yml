@@ -1,35 +1,137 @@
 version: 1
 
-default_unqualified_agent_target: extension-product-agent
+defaults:
+  ambiguous_agent_request:
+    target_class: extension-produced-agent
+    canonical_source: resources/copilot/agents/**
+  unresolved_target:
+    action: block
+
+target_types:
+  - extension-source
+  - consumer-etl-workspace
+  - temporary-test-workspace
+  - unknown
 
 scopes:
-  maintainer-control-plane:
-    repository: extension-source
-    paths:
-      - ".github/**"
-      - "AGENTS.md"
-    writable_when: explicit-maintainer-workflow-request
+  extension-source:
+    description: Extension source repository and maintainer control plane
+    control_plane:
+      - .github/**
+      - AGENTS.md
+    protected_by_default: true
 
-  product-source:
-    repository: extension-source
-    paths:
-      - "resources/copilot/**"
+    packaged_product_sources:
+      agents: resources/copilot/agents/**
+      prompts: resources/copilot/prompts/**
+      skills: resources/copilot/skills/**
+      instructions: resources/copilot/instructions/**
+      knowledge: resources/copilot/knowledge/**
 
-  runtime-generator:
-    repository: extension-source
-    paths:
-      - "src/customization/**"
+    runtime_generation:
+      - src/customization/**
 
-  consumer-generated-output:
-    repository: consumer-etl-workspace
-    paths:
-      - ".github/agents/**"
-      - ".github/prompts/**"
-      - ".github/instructions/**"
-    writable_when: preview-validated-and-approved
+    generated_output_allowed: false
 
-target_policy:
-  extension-source: deny-generated-output
-  consumer-etl-workspace: allow-after-approval
-  temporary-test-workspace: allow-during-test
-  unknown: block
+  consumer-etl-workspace:
+    description: Explicitly selected end-user ETL workspace
+    generated_destinations:
+      agents: .github/agents/**
+      prompts: .github/prompts/**
+      instructions: .github/instructions/**
+
+    write_policy:
+      preview_required: true
+      validation_required: true
+      explicit_approval_required: true
+      exact_preview_match_required: true
+      managed_assets_only: true
+      unmanaged_collision: block
+      outside_workspace: block
+
+  temporary-test-workspace:
+    description: Unique isolated consumer fixture used by write-capable tests
+    root_policy: unique-os-temporary-directory
+
+    generated_destinations:
+      - .github/**
+
+    requirements:
+      explicit_target_root: true
+      cleanup_required: true
+      cleanup_on_failure: true
+      extension_source_must_remain_unchanged: true
+
+    forbidden_implicit_roots:
+      - process.cwd()
+      - extension-source
+      - extension-installation
+
+  unknown:
+    description: Target cannot be proven safely
+    write_policy:
+      action: block
+
+target_resolution:
+  explicit_workspace_folder_required: true
+  multi_root_requires_explicit_selection: true
+  process_cwd_is_not_a_destination: true
+  extension_installation_is_not_a_destination: true
+  extension_source_is_not_consumer_output: true
+  outside_selected_workspace: block
+  path_traversal: block
+  normalize_windows_and_posix_paths: true
+
+agent_resolution:
+  unqualified_agent_request:
+    means: extension-produced-agent
+    edit_source: resources/copilot/agents/**
+    never_edit_by_default: .github/agents/**
+
+  maintainer_agent_request:
+    requires_explicit_user_intent: true
+    edit_source: .github/agents/**
+
+generated_asset_ownership:
+  required_fields:
+    - stable_asset_id
+    - relative_destination
+    - template_source_id
+    - generator_version
+    - checksum
+    - owner
+
+  unknown_ownership:
+    action: leave-unchanged
+    report_as: unmanaged
+
+test_isolation:
+  temporary_root:
+    node_api:
+      - os.tmpdir()
+      - fs.mkdtemp()
+
+  forbidden_destinations:
+    - extension-source
+    - extension-installation
+    - real-maintainer-control-plane
+
+  post_test_guards:
+    - extension-repository-.github-unchanged
+    - no-generated-output-outside-fixture
+    - temporary-fixtures-cleaned
+
+operational_tasks:
+  start_new_task_at_intake:
+    - edit
+    - build
+    - package
+    - install
+    - publish
+    - deploy
+    - repair
+    - upgrade
+
+installation_states:
+  package_installed: INSTALLED_NOT_ACTIVATED
+  host_reloaded_and_live_smoke_passed: POST_INSTALL_VERIFIED
