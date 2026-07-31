@@ -59,8 +59,42 @@ const requiredTargetRules = [
   "unknown: block",
 ];
 
+const requiredOrchestratorRules = [
+  "agents:",
+  "- Planner",
+  "- Verifier",
+  "Invoke `Planner` as a subagent",
+  "Invoke `Verifier` as a fresh subagent",
+  "Do not perform or simulate final verification yourself",
+  "maximum of two remediation cycles",
+  "If the agent tool or either required subagent is unavailable, return `BLOCKED`",
+];
+
+const requiredVerifierRules = [
+  "disable-model-invocation: false",
+  "Do not edit files",
+  "`VERIFIED`",
+  "`CHANGES_REQUIRED`",
+  "`BLOCKED`",
+];
+
+const requiredBuildRules = [
+  "invoke `Planner` as an actual subagent",
+  "invoke `Verifier` as a fresh, independent subagent",
+  "Do not role-play or simulate Planner or Verifier",
+  "return `DONE` only after `VERIFIED`",
+];
+
 async function read(relativePath) {
   return readFile(path.join(repoRoot, relativePath), "utf8");
+}
+
+function assertContains(content, rules, relativePath) {
+  for (const rule of rules) {
+    if (!content.includes(rule)) {
+      throw new Error(`${relativePath} is missing required rule: ${rule}`);
+    }
+  }
 }
 
 for (const relativePath of requiredFiles) {
@@ -78,18 +112,38 @@ for (const relativePath of requiredFiles) {
 }
 
 const agentContract = await read("AGENTS.md");
-for (const rule of requiredAgentRules) {
-  if (!agentContract.includes(rule)) {
-    throw new Error(`AGENTS.md is missing required rule: ${rule}`);
-  }
-}
+assertContains(agentContract, requiredAgentRules, "AGENTS.md");
 
 const targetContract = await read("workflow/targets.yml");
-for (const rule of requiredTargetRules) {
-  if (!targetContract.includes(rule)) {
-    throw new Error(`workflow/targets.yml is missing required rule: ${rule}`);
-  }
-}
+assertContains(targetContract, requiredTargetRules, "workflow/targets.yml");
+
+const orchestratorContract = await read(".github/agents/orchestrator.agent.md");
+assertContains(
+  orchestratorContract,
+  requiredOrchestratorRules,
+  ".github/agents/orchestrator.agent.md",
+);
+
+const verifierContract = await read(".github/agents/verifier.agent.md");
+assertContains(
+  verifierContract,
+  requiredVerifierRules,
+  ".github/agents/verifier.agent.md",
+);
+
+const buildContract = await read(".github/prompts/build.prompt.md");
+assertContains(buildContract, requiredBuildRules, ".github/prompts/build.prompt.md");
+
+const workflowContract = await read("workflow/README.md");
+assertContains(
+  workflowContract,
+  [
+    "## Automatic subagent orchestration",
+    "Orchestrator → Planner subagent → Orchestrator implementation → fresh Verifier subagent → Result",
+    "The agent tool and the `agents` allowlist are the required automatic delegation mechanism.",
+  ],
+  "workflow/README.md",
+);
 
 for (const relativePath of frontmatterFiles) {
   const content = await read(relativePath);

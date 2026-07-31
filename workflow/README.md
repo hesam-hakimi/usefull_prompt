@@ -6,10 +6,29 @@ This is the canonical execution flow for Copilot agents.
 
 | Mode | Entry point | Expected result |
 | --- | --- | --- |
-| Build | `/build` or an explicit “implement/fix/build” request | Target resolution, plan, bounded implementation, verification, result |
+| Build | `/build` or an explicit “implement/fix/build” request | Target resolution, delegated plan, bounded implementation, independent subagent verification, result |
 | Plan | `/plan-change` or an ambiguous request | Target resolution and evidence-backed plan; no edits |
 | Verify | `/verify-change` | Independent assessment of the target and current diff |
 | Explain | Direct question | Evidence-backed explanation; no edits |
+
+## Automatic subagent orchestration
+
+`/build` uses Orchestrator as the parent agent and runs this sequence without requiring the user to switch agents:
+
+`Orchestrator → Planner subagent → Orchestrator implementation → fresh Verifier subagent → Result`
+
+Rules:
+
+1. Planner and Verifier must be invoked through the agent tool as actual subagents.
+2. Orchestrator must not role-play, simulate, or replace either subagent.
+3. Verifier receives factual inputs: the original request, acceptance criteria, resolved target, protected paths, exact diff, and test evidence.
+4. `VERIFIED` advances to `DONE`.
+5. `CHANGES_REQUIRED` returns control to Orchestrator for the smallest grounded correction, followed by a new Verifier subagent.
+6. A maximum of two remediation cycles is allowed; unresolved findings then produce `BLOCKED`.
+7. `BLOCKED` stops the workflow.
+8. If subagent invocation is unavailable, the workflow fails closed with `BLOCKED`.
+
+The `handoffs` frontmatter feature is not the automation mechanism for `/build`: handoff buttons are user-guided transitions. The agent tool and the `agents` allowlist are the required automatic delegation mechanism.
 
 ## Phase 1 — Intake
 
@@ -51,11 +70,12 @@ Output state: `CONTEXT_READY` or `BLOCKED`.
 
 ## Phase 4 — Plan
 
-1. Describe current and desired behavior.
-2. Identify callers, contracts, manifests, writers, tests, and blast radius.
-3. Record behavior and protected paths that must not change.
-4. Choose the smallest coherent implementation.
-5. Define acceptance checks, test isolation, and rollback/recovery.
+1. Orchestrator invokes Planner as a subagent.
+2. Planner describes current and desired behavior.
+3. Planner identifies callers, contracts, manifests, writers, tests, and blast radius.
+4. Planner records behavior and protected paths that must not change.
+5. Planner chooses the smallest coherent implementation.
+6. Planner defines acceptance checks, test isolation, and rollback/recovery.
 
 Use `docs/change-contract.md` for non-trivial work.
 
@@ -77,17 +97,19 @@ Output state: `IMPLEMENTED` or `BLOCKED`.
 
 ## Phase 6 — Verification
 
-Verification is a separate reasoning pass:
+Orchestrator must invoke Verifier as a fresh subagent after implementation and relevant checks.
 
-1. review the exact diff and resolved target;
-2. map each acceptance criterion to evidence;
-3. run relevant tests and contract checks;
-4. verify ownership boundaries and protected behavior;
-5. confirm write-capable tests used temporary consumer workspaces;
-6. confirm tests left the extension repository’s `.github/**` unchanged;
-7. search for hidden assumptions, stale docs, skipped errors, path traversal, Windows path issues, and accidental scope.
+The Verifier:
 
-The verifier reports findings; it does not silently repair them.
+1. reviews the exact diff and resolved target;
+2. maps each acceptance criterion to evidence;
+3. runs or inspects relevant tests and contract checks;
+4. verifies ownership boundaries and protected behavior;
+5. confirms write-capable tests used temporary consumer workspaces;
+6. confirms tests left the extension repository’s `.github/**` unchanged;
+7. searches for hidden assumptions, stale docs, skipped errors, path traversal, Windows path issues, and accidental scope.
+
+The Verifier reports findings; it does not silently repair them.
 
 Output state: `VERIFIED`, `CHANGES_REQUIRED`, or `BLOCKED`.
 

@@ -1,6 +1,8 @@
 ---
 name: Planner
-description: Maintainer-only agent that produces an evidence-backed target and change contract without editing repository files.
+description: Maintainer-only subagent that produces an evidence-backed target and change contract without editing repository files.
+user-invocable: true
+disable-model-invocation: false
 ---
 
 # Planner
@@ -19,6 +21,6 @@ For each request:
 4. Inspect only the code, manifests, writers, and tests needed to understand current behavior.
 5. Separate verified facts, assumptions, and unknowns.
 6. Identify consumers, compatibility constraints, blast radius, test-isolation requirements, and risk.
-7. Return a completed `docs/change-contract.md`.
+7. Return `PLAN_READY` with a completed `docs/change-contract.md`, or return `BLOCKED` with the missing evidence.
 
-If evidence or ownership is missing, ask focused questions or return `BLOCKED`. Do not turn assumptions into implementation requirements.
+Do not implement, edit, or verify the change. Do not turn assumptions into implementation requirements.
