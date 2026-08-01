@@ -1,32 +1,79 @@
-Fix the runtime input-resolution bug that causes the installed extension to request access to the extension-source sample_sttm directory while operating in a consumer ETL workspace.
+/verify-change
 
-Required behavior:
+This is a read-only investigation. Do not edit files, build, package, install,
+generate consumer assets, or approve any writes.
 
-1. User-provided STTM files inside the selected consumer workspace are the only runtime STTM inputs.
-2. Packaged examples and sample_sttm directories are documentation/test fixtures only and must never be resolved as runtime input.
-3. Runtime code, agents, prompts, skills, instructions, and session-store recovery must never reference or access:
-   - the extension source repository;
-   - the extension installation directory;
-   - an absolute developer-machine path;
-   - docs/product/sttm-document-understanding/sample_sttm.
-4. A stale session-store path outside the current workspace must be rejected and discarded.
-5. Resolve the STTM path relative to the explicitly selected VS Code workspace folder.
-6. Normalize Windows and POSIX paths and reject any resolved input outside the selected workspace.
-7. Do not solve this by removing STTM interpretation or packaged documentation.
+Goal:
+Determine the exact origin of the skill named:
 
-Before editing, emit TARGET_RESOLVED and inventory every reference to:
-- sample_sttm;
-- docs/product/sttm-document-understanding;
-- absolute Windows paths;
-- stored STTM paths;
-- fallback input-resolution logic.
+cd-renewal-sttm-job
 
-Add regression tests proving:
-- a workspace-relative STTM file is accepted;
-- an extension-source sample path is rejected;
-- a stale session path outside the workspace is ignored;
-- Windows and POSIX containment checks behave consistently;
-- the installed VSIX contains no machine-specific absolute path;
-- runtime does not request external-directory permission during normal STTM processing.
+Observed behavior:
+- The installed ETL Extension was invoked in a consumer ETL workspace.
+- The user supplied:
+  sttm/CD-Renewal_DataMapping_V2.2 1.xlsx
+- The Agent displayed:
+  "Reading skill @ cd-renewal-sttm-job"
+- We need to determine whether this is:
+  1. a packaged product skill,
+  2. a generated consumer-workspace skill,
+  3. a personal/user skill,
+  4. stale session state,
+  5. stale compiled/VSIX output,
+  6. or a dynamically generated skill.
 
-Run Planner → implementation → fresh Verifier. Build and inspect the VSIX after the fix, but do not install it until verification returns VERIFIED.
+Required investigation:
+1. Search exact literals:
+   - cd-renewal-sttm-job
+   - CD Renewal
+   - cd-renewal
+   - cd_renewal
+   - CD-Renewal_DataMapping
+   - sample_sttm
+
+2. Inspect:
+   - resources/copilot/**
+   - src/**
+   - package.json and contributes.chatSkills
+   - asset catalogs and generated manifests
+   - .github/skills/**
+   - .agents/skills/**
+   - .claude/skills/**
+   - tests/**
+   - docs/**
+   - dist/**
+   - out/**
+   - generated/**
+   - final VSIX contents
+
+3. Determine the exact source path and registration mechanism for the loaded
+   skill.
+
+4. Inspect the skill body, scripts, examples, and referenced resources for
+   hardcoded:
+   - job names
+   - STTM paths
+   - config paths
+   - environment names
+   - table names
+   - transformations
+   - onboarding values
+   - sample/example paths
+
+5. Verify whether preview or activation created the skill before user approval.
+
+6. Do not treat the skill name alone as proof. Distinguish:
+   - packaged hardcoding,
+   - workspace residue,
+   - user-profile customization,
+   - session-state leakage,
+   - and safe runtime derivation.
+
+Return:
+- exact source of the skill;
+- why Copilot selected it;
+- whether it is a product defect;
+- affected scope;
+- evidence with file paths and line references;
+- recommended smallest coherent fix;
+- no file changes.
