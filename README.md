@@ -1,27 +1,31 @@
 # Copilot Development Workflow
 
-This repository is a clean foundation for turning a plain-language request into a safe, verified change with GitHub Copilot.
+This repository is a clean foundation for turning a plain-language request into a safe, evidence-driven, verified change with GitHub Copilot.
 
-The workflow is context- and target-first:
+The workflow is context-, evidence-, and target-first:
 
 1. The agent resolves which repository, workspace, and asset class the request targets.
 2. It reads the relevant business and system context.
-3. It identifies unknowns, ownership boundaries, and compatibility risks.
-4. It creates a bounded change plan.
-5. It implements only the approved scope.
-6. A verifier checks the exact target, diff, and evidence.
-7. The agent returns a predictable result summary.
+3. When behavior or root cause is unclear, a read-only Evidence Researcher produces a structured evidence packet.
+4. It identifies unknowns, ownership boundaries, question provenance, and compatibility risks.
+5. It creates a bounded change plan.
+6. It implements only the approved scope.
+7. A fresh verifier checks the exact target, diff, package/runtime evidence, and regressions.
+8. The agent returns a predictable result or a bounded recovery checkpoint.
 
 ```mermaid
 flowchart LR
     A["Request"] --> B["Target"]
     B --> C["Context"]
-    C --> D["Plan"]
-    D --> E{"Safe?"}
-    E -->|Yes| F["Implement"]
-    E -->|No| X["Blocked"]
-    F --> G["Verify"]
-    G --> H["Result"]
+    C --> D{"Evidence sufficient?"}
+    D -->|No| E["Evidence Researcher"]
+    E --> F["Plan"]
+    D -->|Yes| F
+    F --> G{"Safe?"}
+    G -->|Yes| H["Implement"]
+    G -->|No| X["Blocked"]
+    H --> I["Verify"]
+    I --> J["Result / Recovery"]
 ```
 
 ## Quick start
@@ -30,9 +34,25 @@ flowchart LR
 2. In GitHub Copilot Chat, select the `Orchestrator` custom agent.
 3. Run `/build` and provide the goal, target, acceptance criteria, constraints, and out-of-scope work.
 4. Review target resolution before allowing implementation.
-5. Review the returned result: changed behavior, files, validation evidence, compatibility impact, and remaining risks.
+5. When root cause or runtime behavior is unclear, run `/investigate` or let Orchestrator invoke `Evidence Researcher`.
+6. After package or installation work, run `/verify-live-flow`; installation alone is not live verification.
+7. Review the returned result: changed behavior, files, validation evidence, compatibility impact, lifecycle state, and remaining risks.
 
 For plan-only work, run `/plan-change`. For an independent review of an existing diff, run `/verify-change`.
+
+## Question-routing rule
+
+Before asking the user for information, the workflow classifies the question as:
+
+- derivable from STTM;
+- derivable from the repository;
+- an authoritative literal;
+- a genuine business decision;
+- user approval;
+- a tooling gap;
+- or a security blocker.
+
+The workflow must not ask the user to paste or reconstruct data that exists in an authorized source but was hidden by truncation, parser limitations, stale state, or missing retrieval tooling.
 
 ## Asset ownership map
 
@@ -52,13 +72,15 @@ The same relative path can have different ownership in different repositories. R
 | --- | --- |
 | `AGENTS.md` | Canonical operating and ownership contract |
 | `workflow/targets.yml` | Machine-readable target and write policy |
+| `workflow/README.md` | Core lifecycle, states, target resolution, and risk gates |
+| `workflow/execution-recovery.md` | Evidence gate, question routing, recovery loop, checkpoints, and new-task rules |
 | `docs/business-context.md` | Business goals, terminology, rules, and invariants |
 | `docs/system-map.md` | Components, contracts, asset topology, dependencies, and test map |
 | `docs/change-contract.md` | Required before/after contract for non-trivial changes |
-| `workflow/README.md` | Workflow phases, states, target resolution, and risk gates |
-| `.github/agents/` | Maintainer-only orchestrator, planner, and verifier roles |
-| `.github/prompts/` | Maintainer entry points for build, plan, and verification |
-| `.github/instructions/` | Always-on business, ownership, coherence, and change-safety guidance |
+| `.github/agents/` | Maintainer-only Orchestrator, Evidence Researcher, Planner, and Verifier |
+| `.github/prompts/` | Maintainer entry points for build, investigation, planning, verification, and live-flow acceptance |
+| `.github/instructions/` | Always-on business, ownership, coherence, change-safety, and recovery guidance |
+| `templates/evidence-packet.md` | Standard read-only investigation and handoff format |
 | `templates/` | Request and result formats |
 | `scripts/validate-workflow.mjs` | Cross-platform workflow-contract validation |
 | `scripts/assert-control-plane-clean.mjs` | Cross-platform post-test mutation guard |
@@ -81,5 +103,7 @@ The same relative path can have different ownership in different repositories. R
 - Keep write-capable tests inside temporary consumer workspaces.
 - Preserve `@etl /workflow create` and its preview-first, approval-gated generation behavior.
 - Report blockers instead of bypassing missing evidence or unavailable tools.
+- Do not repeatedly retry a failed stage without new evidence.
+- A live failure requiring source or package changes starts a new task.
 
-The detailed authority, precedence, and output rules live in [AGENTS.md](AGENTS.md).
+The detailed authority, precedence, execution, recovery, and output rules live in [AGENTS.md](AGENTS.md), [workflow/README.md](workflow/README.md), and [workflow/execution-recovery.md](workflow/execution-recovery.md).
