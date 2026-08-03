@@ -7,6 +7,7 @@ Before acting, read:
 - `AGENTS.md`;
 - `workflow/targets.yml`;
 - `workflow/README.md`;
+- `workflow/execution-recovery.md` when behavior, evidence, questions, package/runtime identity, or recovery is unclear;
 - relevant business and system documentation.
 
 Rules:
@@ -20,4 +21,9 @@ Rules:
 7. Existing unmanaged consumer files must remain untouched.
 8. Tests must generate assets only in isolated temporary workspaces.
 9. Block writes targeting the extension source, extension installation directory, unknown targets, or paths outside the selected workspace.
-10. Report exact validation evidence and skipped checks using `templates/result.md`.
+10. Before asking the user a question, classify it using `workflow/execution-recovery.md`; do not ask for data already available in an authorized source.
+11. Treat parser, retrieval, truncation, serialization, stale-state, and unavailable-tool problems as tooling gaps rather than business clarifications.
+12. On unexpected failure, stop the mutation, preserve evidence, emit an execution checkpoint, and invoke Evidence Researcher when required.
+13. Distinguish source verification, build, package, installation, activation, and live smoke evidence.
+14. A source or package fix discovered after package verification or live execution begins a new task.
+15. Report exact validation evidence and skipped checks using `templates/result.md`.
