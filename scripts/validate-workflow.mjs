@@ -7,44 +7,69 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const requiredFiles = [
   "README.md",
   "AGENTS.md",
+  "COPY_ORDER.md",
   "docs/business-context.md",
   "docs/system-map.md",
   "docs/change-contract.md",
   "docs/definition-of-done.md",
   "workflow/README.md",
   "workflow/targets.yml",
+  "workflow/execution-recovery.md",
   "templates/request.md",
+  "templates/evidence-packet.md",
   "templates/result.md",
   ".github/copilot-instructions.md",
   ".github/agents/orchestrator.agent.md",
+  ".github/agents/evidence-researcher.agent.md",
   ".github/agents/planner.agent.md",
   ".github/agents/verifier.agent.md",
   ".github/prompts/build.prompt.md",
+  ".github/prompts/investigate.prompt.md",
   ".github/prompts/plan-change.prompt.md",
   ".github/prompts/verify-change.prompt.md",
+  ".github/prompts/verify-live-flow.prompt.md",
   ".github/instructions/business-context.instructions.md",
   ".github/instructions/change-safety.instructions.md",
   ".github/instructions/workflow-asset-boundaries.instructions.md",
   ".github/instructions/workflow-coherence.instructions.md",
+  ".github/instructions/execution-recovery.instructions.md",
+  ".github/workflows/validate-workflow.yml",
   "scripts/assert-control-plane-clean.mjs",
 ];
 
 const frontmatterFiles = [
   ".github/agents/orchestrator.agent.md",
+  ".github/agents/evidence-researcher.agent.md",
   ".github/agents/planner.agent.md",
   ".github/agents/verifier.agent.md",
   ".github/prompts/build.prompt.md",
+  ".github/prompts/investigate.prompt.md",
   ".github/prompts/plan-change.prompt.md",
   ".github/prompts/verify-change.prompt.md",
+  ".github/prompts/verify-live-flow.prompt.md",
   ".github/instructions/business-context.instructions.md",
   ".github/instructions/change-safety.instructions.md",
   ".github/instructions/workflow-asset-boundaries.instructions.md",
   ".github/instructions/workflow-coherence.instructions.md",
+  ".github/instructions/execution-recovery.instructions.md",
+];
+
+const copyOrderPaths = [
+  "workflow/execution-recovery.md",
+  ".github/instructions/execution-recovery.instructions.md",
+  ".github/agents/evidence-researcher.agent.md",
+  ".github/prompts/investigate.prompt.md",
+  ".github/prompts/verify-live-flow.prompt.md",
+  "templates/evidence-packet.md",
+  ".github/workflows/validate-workflow.yml",
 ];
 
 const requiredAgentRules = [
   "Do not guess",
   "Asset ownership and target resolution",
+  "Consumer workspace and external-path policy",
+  "Workflow states",
+  "Automatic orchestration",
   "Change-safety invariants",
   "Regression policy",
   "Output contract",
@@ -61,17 +86,29 @@ const requiredTargetRules = [
 
 const requiredOrchestratorRules = [
   "agents:",
+  "- Evidence Researcher",
   "- Planner",
   "- Verifier",
   "Immediately emit the required `## Target Resolution` report",
+  "invoke `Evidence Researcher` as a subagent",
   "Invoke `Planner` as a subagent",
   "Invoke `Verifier` as a fresh subagent",
-  "A new mutating or operational request",
+  "Before asking the user any question, classify it",
+  "A source or package change discovered after package verification",
   "INSTALLED_NOT_ACTIVATED",
   "POST_INSTALL_VERIFIED",
   "Do not perform or simulate final verification yourself",
-  "maximum of two remediation cycles",
-  "If the agent tool or either required subagent is unavailable, return `BLOCKED`",
+  "maximum of two same-task remediation cycles",
+];
+
+const requiredEvidenceResearcherRules = [
+  "disable-model-invocation: false",
+  "Do not:",
+  "EVIDENCE_READY",
+  "EVIDENCE_BLOCKED",
+  "Question classification",
+  "templates/evidence-packet.md",
+  "does not implement",
 ];
 
 const requiredVerifierRules = [
@@ -85,12 +122,35 @@ const requiredVerifierRules = [
 const requiredBuildRules = [
   "start a new task for every new mutating or operational request",
   "emit the complete `## Target Resolution` report before any delegation",
+  "invoke `Evidence Researcher` as an actual subagent",
   "invoke `Planner` as an actual subagent",
   "invoke `Verifier` as a fresh, independent subagent",
-  "Do not role-play or simulate Planner or Verifier",
+  "Do not role-play or simulate Evidence Researcher, Planner, or Verifier",
+  "Do not repeatedly retry a failed action without new evidence",
   "return `DONE` only after `VERIFIED`",
   "INSTALLED_NOT_ACTIVATED",
   "POST_INSTALL_VERIFIED",
+];
+
+const requiredRecoveryRules = [
+  "## Optional evidence gate",
+  "EVIDENCE_REQUIRED",
+  "EVIDENCE_READY",
+  "EVIDENCE_BLOCKED",
+  "## Question classification",
+  "DERIVABLE_FROM_STTM",
+  "DERIVABLE_FROM_REPO",
+  "AUTHORITATIVE_LITERAL",
+  "BUSINESS_DECISION",
+  "USER_APPROVAL",
+  "TOOLING_GAP",
+  "SECURITY_BLOCKER",
+  "## Recovery loop",
+  "## Same-task remediation versus new task",
+  "## Execution checkpoint",
+  "## Source-to-runtime evidence chain",
+  "## Baseline and pre-existing failures",
+  "## Partial progress",
 ];
 
 async function read(relativePath) {
@@ -142,6 +202,15 @@ assertContains(
   ".github/agents/orchestrator.agent.md",
 );
 
+const evidenceResearcherContract = await read(
+  ".github/agents/evidence-researcher.agent.md",
+);
+assertContains(
+  evidenceResearcherContract,
+  requiredEvidenceResearcherRules,
+  ".github/agents/evidence-researcher.agent.md",
+);
+
 const verifierContract = await read(".github/agents/verifier.agent.md");
 assertContains(
   verifierContract,
@@ -152,21 +221,77 @@ assertContains(
 const buildContract = await read(".github/prompts/build.prompt.md");
 assertContains(buildContract, requiredBuildRules, ".github/prompts/build.prompt.md");
 
+const investigateContract = await read(".github/prompts/investigate.prompt.md");
+assertContains(
+  investigateContract,
+  [
+    "read-only",
+    "invoke `Evidence Researcher` as an actual subagent",
+    "EVIDENCE_READY",
+    "EVIDENCE_BLOCKED",
+    "templates/evidence-packet.md",
+    "stop without invoking Planner",
+  ],
+  ".github/prompts/investigate.prompt.md",
+);
+
+const liveFlowContract = await read(".github/prompts/verify-live-flow.prompt.md");
+assertContains(
+  liveFlowContract,
+  [
+    "INSTALLED_NOT_ACTIVATED",
+    "POST_INSTALL_VERIFIED",
+    "active version",
+    "live",
+    "requires a new task at `INTAKE`",
+    "fresh `Verifier`",
+  ],
+  ".github/prompts/verify-live-flow.prompt.md",
+);
+
 const workflowContract = await read("workflow/README.md");
 assertContains(
   workflowContract,
   [
-    "## Automatic subagent orchestration",
-    "Orchestrator → Planner subagent → Orchestrator implementation → fresh Verifier subagent → Result",
-    "The agent tool and the `agents` allowlist are the required automatic delegation mechanism.",
-    "## Task boundaries and re-entry",
-    "A new mutating or operational request restarts the state machine at `INTAKE`",
-    "Planner invocation and all mutating or operational actions are forbidden until this report is visible.",
+    "## Agent topology",
+    "User request",
+    "Fresh Verifier",
+    "## State contract",
+    "A new mutating or operational user message always begins a new task at `INTAKE`.",
+    "## Build and installation lifecycle",
     "INSTALLED_NOT_ACTIVATED",
     "POST_INSTALL_VERIFIED",
   ],
   "workflow/README.md",
 );
+
+const recoveryContract = await read("workflow/execution-recovery.md");
+assertContains(
+  recoveryContract,
+  requiredRecoveryRules,
+  "workflow/execution-recovery.md",
+);
+
+const recoveryInstruction = await read(
+  ".github/instructions/execution-recovery.instructions.md",
+);
+assertContains(
+  recoveryInstruction,
+  [
+    "Before asking the user a question, classify it",
+    "Do not repeatedly retry a failed action without new evidence",
+    "A source change discovered after package verification",
+    "pre-existing only when reproduced",
+  ],
+  ".github/instructions/execution-recovery.instructions.md",
+);
+
+const copyOrder = await read("COPY_ORDER.md");
+for (const relativePath of copyOrderPaths) {
+  if (!copyOrder.includes(`\`${relativePath}\``)) {
+    throw new Error(`COPY_ORDER.md is missing workflow asset: ${relativePath}`);
+  }
+}
 
 for (const relativePath of frontmatterFiles) {
   const content = await read(relativePath);
