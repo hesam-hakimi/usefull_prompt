@@ -1,0 +1,464 @@
+/workflow
+
+TEST MODE: READ-ONLY END-TO-END ACCEPTANCE TEST
+
+Goal:
+Verify that the installed Databricks ETL Copilot Extension can independently
+read, interpret, cross-reference, and plan ETL artifacts from the supplied STTM
+workbook without asking the user to paste information that already exists in
+the workbook.
+
+Expected active Extension version:
+0.3.135
+
+Selected consumer workspace:
+Use only the explicitly selected VS Code consumer ETL workspace.
+
+Authoritative STTM:
+sttm/CD-Renewal_DataMapping_V2.2 1.xlsx
+
+This test is analyze-and-preview only.
+
+Do not:
+- create or modify any workspace file;
+- call etl_write_to_workspace;
+- publish to DBFS;
+- deploy, onboard, register, schedule, or run anything;
+- trigger an ADF pipeline;
+- execute SQL or Python;
+- use terminal commands to parse the workbook;
+- use pandas, openpyxl, or another parser as a fallback;
+- ask me to paste workbook cells or export the workbook to CSV/Markdown;
+- use sample_sttm;
+- read Extension source, installation, documentation, examples, or test
+  fixtures as runtime input;
+- use a stale absolute path or another workspace folder;
+- invent missing ETL, infrastructure, onboarding, or deployment values.
+
+──────────────────────────────────────────────────────────────────────────────
+1. Runtime and target preflight
+──────────────────────────────────────────────────────────────────────────────
+
+First call:
+
+td-etl.databricks-etl-copilot/etl_capabilities
+
+Report:
+- active Extension version;
+- selected workspace root;
+- target classification;
+- resolved STTM path;
+- whether etl_interpret_sttm is registered;
+- whether the STTM parser is runtime-ready;
+- whether the capability is available;
+- exact blockers, if any.
+
+The expected active version is 0.3.135.
+
+If another version is active, return:
+
+FAIL_ACTIVE_VERSION
+
+and stop without reading or writing consumer artifacts.
+
+If the STTM parser is registered but not runtime-ready, return:
+
+FAIL_STTM_RUNTIME_NOT_READY
+
+with the exact dependency or runtime blocker.
+
+──────────────────────────────────────────────────────────────────────────────
+2. Customization provenance check
+──────────────────────────────────────────────────────────────────────────────
+
+Inspect and report whether the consumer workspace contains local customizations
+under paths such as:
+
+.github/skills/**
+.github/prompts/**
+.github/instructions/**
+.agents/skills/**
+.claude/skills/**
+
+Specifically report any CD Renewal-specific skill, prompt, or instruction.
+
+Do not treat project-local customizations as authoritative product behavior.
+Use the STTM, current consumer repository artifacts, current Framework tools,
+and packaged Extension contracts as higher-trust evidence.
+
+If a local customization conflicts with the STTM or packaged Framework
+contracts, report the conflict and do not silently follow the local
+customization.
+
+──────────────────────────────────────────────────────────────────────────────
+3. Parse the exact workbook
+──────────────────────────────────────────────────────────────────────────────
+
+Call:
+
+td-etl.databricks-etl-copilot/etl_interpret_sttm
+
+using exactly:
+
+sttm/CD-Renewal_DataMapping_V2.2 1.xlsx
+
+Resolve this path against the selected consumer workspace.
+
+Return:
+- workbook filename and hash, if supported;
+- complete sheet inventory;
+- sheet row ranges or record counts;
+- detected current workbook version;
+- revision/version evidence;
+- parsing diagnostics;
+- unresolved workbook-level issues.
+
+The expected logical sheets include, where present:
+
+- ReadMe
+- Revision History
+- Table & Schema Definition
+- File & Schema Definition
+- Field Mapping
+- Business Rules
+- Transformation Rules or Logic
+- Join Clause
+- Error Messages
+- Appendix
+
+Do not treat Appendix references as authoritative implementations unless the
+referenced files are present in the consumer repository and independently
+validated.
+
+──────────────────────────────────────────────────────────────────────────────
+4. Build a cross-sheet STTM evidence graph
+──────────────────────────────────────────────────────────────────────────────
+
+Resolve STTM references by identifier, including:
+
+- T_SCHM_* → Table & Schema Definition
+- F_SCHM_* → File & Schema Definition
+- BR_* → Business Rules
+- TR_* → Transformation Rules or Logic
+- JC_* → Join Clause
+- FT_* → filters
+- ER_* → Error Messages
+
+For every resolved reference, report:
+
+- identifier;
+- source sheet;
+- source row and cell/range;
+- referenced sheet;
+- referenced row and cell/range;
+- latest description;
+- current version;
+- version date;
+- previous-version description, when present;
+- whether the reference resolved completely.
+
+Use Latest Description and the current Version as implementation evidence.
+
+Use Previous Version only for:
+- comparison;
+- regression analysis;
+- detecting contradictions or stale dependent rules.
+
+Do not silently implement a Previous Version value when a newer value exists.
+
+──────────────────────────────────────────────────────────────────────────────
+5. Long-cell integrity test
+──────────────────────────────────────────────────────────────────────────────
+
+Retrieve and return the complete, untruncated contents of:
+
+- BR_0003
+- TR_0003
+- BR_0007
+- TR_0007
+- JC_001
+- FT_001
+- FT_002
+- FT_003
+
+Include sheet, row, cell/range, version, and version-date provenance for each.
+
+Do not return snippets ending with ellipses.
+
+Do not shorten SQL, CASE statements, JOIN clauses, UNION ALL branches, or filter
+conditions.
+
+If the initial STTM interpretation response contains a truncated value:
+
+1. use a targeted STTM rule/cell retrieval capability if one is available;
+2. retrieve the original cell by rule ID or exact sheet/range;
+3. preserve the complete original text and provenance.
+
+If no targeted retrieval capability exists, do not ask me to paste the cell.
+
+Instead return:
+
+BLOCKED_TOOLING_DEFECT_LONG_CELL_RETRIEVAL
+
+and include:
+- affected rule ID;
+- sheet;
+- row/cell;
+- visible prefix;
+- where truncation occurred;
+- missing product capability;
+- unaffected artifacts that can still proceed to preview.
+
+A long cell that exists in the workbook is not a business clarification.
+
+──────────────────────────────────────────────────────────────────────────────
+6. Derive the ETL design from the STTM
+──────────────────────────────────────────────────────────────────────────────
+
+From STTM evidence, derive and report:
+
+- source tables/views;
+- source aliases;
+- source filters;
+- join graph and join order;
+- source-to-target column mappings;
+- transformation rules;
+- output table;
+- output files;
+- file field sequence;
+- data types;
+- mandatory flags;
+- writer strategy;
+- overwrite/append/merge semantics;
+- business rules;
+- response-code mappings;
+- aggregation logic;
+- unresolved contradictions.
+
+Do not assume a raw folder path when the STTM identifies registered
+tables/views.
+
+Do not infer merge/upsert behavior merely from the fact that a curated target
+exists.
+
+Do not infer output labels from filenames.
+
+Do not invent Error Messages when the Error Messages sheet contains identifiers
+without descriptions.
+
+──────────────────────────────────────────────────────────────────────────────
+7. Detect cross-version contradictions
+──────────────────────────────────────────────────────────────────────────────
+
+Compare all dependent rules that reference the same business value.
+
+In particular, verify whether:
+- the current response-label transformation;
+- the success/failure aggregation;
+- the output-file schema;
+- and any filters using response values
+
+use mutually compatible labels and versions.
+
+For every contradiction, report:
+
+- conflicting rule IDs;
+- each rule version and version date;
+- exact conflicting values;
+- affected output;
+- likely functional impact;
+- whether preview can continue;
+- whether writing must be blocked.
+
+Do not normalize or silently repair conflicting business values.
+
+Block only the affected artifact where possible rather than blocking unrelated
+job/config analysis.
+
+──────────────────────────────────────────────────────────────────────────────
+8. Inspect existing consumer artifacts
+──────────────────────────────────────────────────────────────────────────────
+
+Inspect the existing consumer repository and determine whether this is a create
+or update operation.
+
+At minimum, inspect where present:
+
+- cd_renewal/job_conf/conf/cd_renewal.json
+- env_conf/dev/env_conf_tdous_dev.yaml
+- env_conf/conf/common_config.yaml
+- cd_renewal/job_onboarding/cd_renewal.json
+- existing SQL/include files;
+- existing output and writer patterns.
+
+Verify:
+- whether a job config already exists;
+- whether the development env config already exists;
+- which shared includes it uses;
+- whether referenced variables resolve;
+- whether a second job or environment config would be a duplicate;
+- whether existing files are validation inputs or actual proposed write
+  destinations.
+
+Prefer reuse of current repository-conformant environment configuration.
+
+Do not propose a second environment config merely because generation is
+possible.
+
+Do not create a second competing job config.
+
+──────────────────────────────────────────────────────────────────────────────
+9. Framework validation
+──────────────────────────────────────────────────────────────────────────────
+
+Use the Extension Framework tools to verify:
+
+- supported modules;
+- module order;
+- output strategy;
+- environment/include behavior;
+- HOCON/YAML interpolation;
+- source and target path semantics;
+- writer compatibility;
+- cross-file consistency.
+
+The normal Framework chain should be evaluated against:
+
+data_sourcing_process
+→ data_transformation
+→ load_enrich_process or dataframe_writer
+→ optional downstream synchronization/publishing
+
+Do not force this sequence when current Framework evidence supports a valid
+variant, but explain every deviation.
+
+Render proposed artifacts only in memory.
+
+Run etl_validate_artifacts against the exact in-memory candidate set when
+sufficient evidence exists.
+
+Do not validate invented placeholder values as though they were confirmed.
+
+──────────────────────────────────────────────────────────────────────────────
+10. Onboarding isolation
+──────────────────────────────────────────────────────────────────────────────
+
+Do not invent or translate descriptive phrases into onboarding literals.
+
+Values such as the following are not automatically valid contract values:
+
+- new/unassigned
+- on-demand/manual trigger only
+- new dedicated job cluster
+
+Resolve onboarding fields only from:
+- the authoritative onboarding schema;
+- current accepted repository examples;
+- current registration evidence;
+- or explicit user input.
+
+If exact values such as job_id, schedule_type, task_cluster_type, active_flag,
+job_pattern, or registration paths cannot be established, mark only onboarding
+as BLOCKED.
+
+Do not block local job/config/SQL preview solely because onboarding is
+unresolved.
+
+──────────────────────────────────────────────────────────────────────────────
+11. Preview manifest
+──────────────────────────────────────────────────────────────────────────────
+
+Produce an exact preview-only manifest with these dispositions:
+
+CREATE
+MODIFY
+UNCHANGED
+CONFLICT
+BLOCKED
+
+For each artifact include:
+- relative path;
+- disposition;
+- purpose;
+- evidence;
+- dependencies;
+- blocker or conflict, if any;
+- whether it is a read-only validation input;
+- whether it would require explicit write approval.
+
+The preview must distinguish:
+- existing files used only for validation;
+- files proposed for modification;
+- files proposed for creation;
+- unresolved business-rule conflicts;
+- unresolved onboarding values.
+
+Do not write any file.
+
+──────────────────────────────────────────────────────────────────────────────
+12. Required test report
+──────────────────────────────────────────────────────────────────────────────
+
+Return exactly these sections:
+
+## Test Status
+PASS, PARTIAL, or FAIL.
+
+## Active Runtime
+Version, workspace, target type, and tool readiness.
+
+## Customization Provenance
+Workspace-local versus packaged Extension customizations.
+
+## Workbook Inventory
+Sheets, versions, diagnostics, and parsing evidence.
+
+## Cross-Sheet Resolution Matrix
+All resolved and unresolved T_SCHM, F_SCHM, BR, TR, JC, FT, and ER references.
+
+## Long-Cell Integrity
+Full retrieval results for BR_0003, TR_0003, BR_0007, TR_0007, JC_001,
+FT_001, FT_002, and FT_003.
+
+## Derived ETL Design
+Sources, joins, transformations, target table, output files, and writer
+strategies.
+
+## Existing Artifact Analysis
+Create-versus-update decision and environment reuse analysis.
+
+## Conflicts and Blockers
+Findings ordered by severity.
+
+## Validation Evidence
+Exact tools invoked and validation results.
+
+## Preview Manifest
+CREATE, MODIFY, UNCHANGED, CONFLICT, and BLOCKED.
+
+## Files Written
+Must be:
+
+None
+
+## Acceptance Verdict
+Evaluate every criterion below individually:
+
+1. Active Extension version is 0.3.135.
+2. STTM parser is registered, runtime-ready, and available.
+3. The exact workspace-relative XLSX was read.
+4. No Extension source/install/sample path was accessed.
+5. No workbook content was requested from the user.
+6. Cross-sheet IDs were resolved.
+7. Long cells were returned without truncation.
+8. Current and previous versions were distinguished.
+9. Version contradictions were detected.
+10. Existing env/job artifacts were reused rather than duplicated.
+11. Onboarding uncertainty was isolated.
+12. Exact preview manifest was produced.
+13. No files were written.
+
+A PASS requires all 13 criteria.
+
+If any criterion fails, return PARTIAL or FAIL with the exact product defect and
+the smallest coherent follow-up change.
