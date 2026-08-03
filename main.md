@@ -1,94 +1,41 @@
-/build
+Use the full response labels from the Latest Description in BR_0003/TR_0003,
+Version 2.2. Do not use the raw Field6 values and do not use the Previous
+Version labels.
 
-Goal:
-Fix the packaged-runtime STTM parser dependency so the installed VSIX can
-execute etl_interpret_sttm against .xlsx files without failing with
-"Cannot find module 'exceljs'".
+500/12532 -> Failed - CDRRequest Failure (500/12532)
+500/12533 -> Failed - CDRRequest Failure (500/12533)
+500/12535 -> Failed - CD Certificate Generation failure (500/12535)
+500/12536 -> Failed - CD Certificate Generation failure (500/12536)
+500/12537 -> Failed - Filenet Storage failure (500/12537)
+500/12538 -> Failed - Filenet Storage failure (500/12538)
+500/12539 -> Failed - CrossChannelRenewal (500/12539)
+206/12511 -> Failed - UMPEmail not sent (206/12511)
+500/1000 -> Failed (Other)
+200 OK -> Success (200)
+ELSE -> NULL
 
-Current verified state:
-- Version 0.3.134 is installed and activated.
-- etl_interpret_sttm is now contributed, registered, visible, and invoked.
-- Workspace-relative STTM resolution succeeds.
-- The invocation fails inside the installed extension with:
-  Cannot find module 'exceljs'
-- This is a VSIX runtime-dependency closure defect, not a workbook, workspace,
-  prompt, skill, or target-resolution defect.
-- The existing parser must be preserved and reused.
-- Reinstalling the same 0.3.134 VSIX will not fix the missing dependency.
 
-Target:
-- Extension source and package/runtime tests only.
-- Produce version 0.3.135.
-- Do not modify consumer ETL files.
-- Do not modify maintainer control-plane files.
-- AGENTS.md, workflow/**, and COPY_ORDER.md are pre-existing WIP and must remain
-  untouched and excluded from this task's commit.
+Do not use raw response values and do not silently use the old aggregation
+labels.
 
-Required investigation:
-1. Inspect package.json and package-lock.json to determine whether exceljs is:
-   - absent,
-   - dev-only,
-   - transitive-only,
-   - or declared as a production dependency.
-2. Inspect the bundler configuration and compiled output for an unresolved
-   require/import of exceljs.
-3. Inspect .vscodeignore, package files configuration, VSCE arguments, and any
-   --no-dependencies packaging behavior.
-4. Extract the built 0.3.134 VSIX and confirm exactly why exceljs cannot be
-   resolved from the packaged extension root.
-5. Do not rewrite or replace SttmExcelWorkbookParser unless a separate parser
-   defect is demonstrated.
+The STTM contains a version conflict:
+- BR_0003/TR_0003 Version 2.2 generates the latest response labels.
+- BR_0007/TR_0007 Version 1.4 still filters on older labels.
 
-Required implementation:
-1. Choose and document one supported packaging strategy:
-   a. bundle exceljs into the compiled extension output, or
-   b. declare it as a production dependency and include exceljs plus required
-      transitive dependencies in the VSIX.
-2. Ensure no unresolved runtime dependency remains in the installed package.
-3. Update etl_capabilities so a registered parser is not reported as available
-   unless its runtime dependencies can actually load.
-4. Return structured capability evidence:
-   registered, runtimeReady, available, and exact blockers.
-5. Preserve fail-closed behavior. Do not add terminal, Python, openpyxl, manual
-   binary reading, sample_sttm fallback, or full-workbook paste as an automatic
-   workaround.
-6. Bump the package and lockfile version to 0.3.135.
+For preview only, align the six existing aggregation rows to the Version 2.2
+response labels for:
+- 500/12532
+- 500/12533
+- 500/12535
+- 500/12536
+- 500/12537
+- 500/12538
+- plus Success (200).
 
-Required tests:
-1. Build the VSIX and extract it into a unique temporary directory.
-2. Load the STTM parser from the extracted packaged runtime, not the source
-   repository runtime.
-3. Parse a small real .xlsx fixture and verify:
-   - sheet inventory,
-   - mappings,
-   - and sheet/row/cell provenance.
-4. If exceljs remains external, prove require.resolve('exceljs') succeeds from
-   the extracted extension root.
-5. If exceljs is bundled, prove compiled output has no unresolved runtime
-   require/import for exceljs.
-6. etl_capabilities must report runtimeReady=false with an exact blocker when
-   the parser dependency is intentionally unavailable in a negative test.
-7. VSIX inspection must show no machine-specific paths.
-8. Existing target-containment and sample_sttm rejection tests must continue to
-   pass.
-9. Real repository .github/** and other protected paths must remain unchanged.
+Mark the cd_successfailure aggregation as BLOCKED pending business confirmation
+of whether these additional Version 2.2 outcomes must also be included:
+- 500/12539: Failed - CrossChannelRenewal (500/12539)
+- 206/12511: Failed - UMPEmail not sent (206/12511)
+- 500/1000: Failed (Other)
 
-Activation verification:
-1. Build databricks-etl-copilot-0.3.135.vsix.
-2. Install it.
-3. Reload VS Code.
-4. Confirm active version 0.3.135.
-5. In a consumer workspace run:
-   sttm/CD-Renewal_DataMapping_V2.2 1.xlsx
-6. Confirm:
-   etl_capabilities reports the parser runtime-ready,
-   etl_interpret_sttm successfully reads the workbook,
-   and the workflow proceeds to an artifact preview without asking the user
-   to paste workbook contents.
-
-Completion:
-- Invoke a fresh Verifier.
-- Report implementation, package, installation, activation, and live smoke-test
-  evidence separately.
-- Do not report DONE until the extracted-VSIX parser test and activated live
-  smoke test both pass.
+Do not write the aggregation SQL until this conflict is resolved.
