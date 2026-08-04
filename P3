@@ -1,0 +1,177 @@
+You are a Chief Enterprise Architect designing the final production architecture for askAlpha.
+
+Generate a presentation-quality Mermaid flowchart.
+
+Return ONLY Mermaid.
+
+This architecture will be presented to senior leadership.
+
+The architecture should follow Microsoft Azure reference architecture principles.
+
+Use clear enterprise layering.
+
+Architecture
+
+Users
+
+↓
+
+Azure Application Gateway (WAF)
+
+↓
+
+Azure App Service
+
+↓
+
+React Frontend
+
+↓
+
+HTTPS REST API
+
+↓
+
+FastAPI Backend
+
+↓
+
+Business Orchestrator
+
+↓
+
+Runtime Model Policy
+
+↓
+
+Semantic Planner
+
+↓
+
+Governed SQL Generator
+
+↓
+
+Authorization Engine
+
+Azure Cloud Services
+
+• Microsoft Entra ID
+• Managed Identity
+• Azure OpenAI
+• Azure SQL (Control Plane)
+• Azure Databricks SQL Warehouse
+• Azure Data Lake Storage Gen2
+• Azure AI Search
+• Azure Cache for Redis
+• Azure Event Hubs
+
+Operational Flow
+
+Business Question
+
+↓
+
+Authentication
+
+↓
+
+Authorization
+
+↓
+
+Semantic Planning
+
+↓
+
+Metadata Retrieval
+
+↓
+
+SQL Generation
+
+↓
+
+SQL Validation
+
+↓
+
+Databricks SQL
+
+↓
+
+Business Answer
+
+Telemetry Flow
+
+Application
+
+↓
+
+Usage Collector
+
+↓
+
+Durable Outbox
+
+↓
+
+Azure Event Hubs
+
+↓
+
+Databricks
+
+↓
+
+ADLS
+
+↓
+
+Showback / Chargeback
+
+Clearly distinguish
+
+Presentation Layer
+
+Application Layer
+
+AI Layer
+
+Control Plane
+
+Data Plane
+
+Telemetry Layer
+
+Azure Cloud
+
+Show
+
+REST API
+
+Managed Identity
+
+HTTPS
+
+SQL
+
+Event Stream
+
+Cache
+
+Do NOT include implementation classes or source code.
+
+The diagram should look like a Microsoft enterprise architecture diagram.
+
+Use left-to-right layout.
+
+Add a legend explaining
+
+Solid Arrow = Request
+
+Dashed Arrow = Authentication
+
+Dotted Arrow = Telemetry
+
+Return Mermaid only.
