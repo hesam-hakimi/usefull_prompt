@@ -1,72 +1,107 @@
-flowchart LR
+flowchart TB
     user["Business Users"]
 
     subgraph azure["Target Enterprise Azure Architecture"]
-        direction LR
+        direction TB
 
         gateway["Azure Application Gateway<br/>WAF"]
 
-        subgraph hosting["Azure App Service"]
-            direction TB
+        subgraph hosting["Azure App Service — One Approved Application Boundary"]
+            direction LR
             react["React SPA"]
             api["FastAPI Backend"]
-            policy["Authorization & Policy"]
+            safety["Pre-LLM Safety<br/>& Cost Guard"]
+            policy["Authorization<br/>& Policy"]
             planner["Semantic Planning"]
-            meter["Usage Collector"]
-            outbox["Durable Outbox"]
+            answer["Answer Assembly"]
+            reviewer["Answer Quality<br/>Reviewer"]
+            sandbox["Hardened Visualization<br/>Sandbox"]
+
             react -->|"HTTPS REST API"| api
-            api --> policy --> planner
-            api --> meter --> outbox
+            api --> safety --> policy --> planner --> answer --> reviewer
+            reviewer -.->|"Bounded Feedback"| planner
+            planner -->|"Visualization Task"| sandbox
+            sandbox -->|"Sanitized Artifact"| answer
+
+            meter["Model Usage<br/>Collector"]
+            audit["User / Data / Export<br/>Audit"]
+            trace["Agent / LLM<br/>Decision Trace"]
+            outbox["Durable Outbox"]
+
+            planner --> meter --> outbox
+            api --> audit --> outbox
+            planner --> trace --> outbox
+            reviewer --> trace
+            sandbox --> trace
         end
 
-        entra["Microsoft Entra ID"]
-        mi["Managed Identity"]
-        openai["Azure OpenAI"]
-        search["Azure AI Search"]
-        cache["Approved Cache Provider<br/>Redis-Compatible"]
-        sql["Azure SQL<br/>Control Plane"]
-        dbsql["Azure Databricks<br/>SQL Warehouse"]
-        adls["ADLS Gen2<br/>Delta / Audit / Artifacts"]
-        events["Azure Event Hubs"]
-        reporting["Showback / Chargeback<br/>Operational Reporting"]
+        subgraph platform["Azure Services and Governed Data Platform"]
+            direction LR
+            entra["Microsoft Entra ID"]
+            mi["Managed Identity"]
+            openai["Azure OpenAI"]
+            search["Azure AI Search"]
+            cache["Approved Scope-Aware Cache<br/>Redis-Compatible"]
+            sql["Azure SQL<br/>Control Plane / Outbox"]
+            dbsql["Azure Databricks<br/>SQL Warehouse"]
+            dbproc["Azure Databricks<br/>Event Processing"]
+            adls["ADLS Gen2<br/>Delta / Audit / Artifacts"]
+        end
+
+        subgraph operations["Telemetry, Audit and Operations"]
+            direction LR
+            events["Azure Event Hubs"]
+            monitor["Approved Enterprise<br/>Monitoring / SIEM"]
+            reporting["Usage Showback<br/>and Operational Reporting"]
+        end
 
         gateway --> react
+        react -.->|"Sign-in"| entra
+        entra -.->|"JWT / Application Group Claims"| api
+
         api -->|"Uses"| mi
-        mi --> openai
-        mi --> search
-        mi --> sql
-        mi --> dbsql
-        mi --> cache
-        mi --> events
+        mi -.->|"Authentication"| openai
+        mi -.->|"Authentication"| search
+        mi -.->|"Authentication"| sql
+        mi -.->|"Approved Workload Identity"| dbsql
+        mi -.->|"Authentication"| dbproc
+        mi -.->|"Authentication"| cache
+        mi -.->|"Authentication"| events
 
         planner -->|"Metadata / Policies"| sql
         planner -->|"Candidate Retrieval"| search
         planner -->|"Model Calls"| openai
         planner -->|"Governed Analytical SQL"| dbsql
+        openai -->|"Model Result"| answer
+        dbsql -->|"Authorized Query Result"| answer
         dbsql -->|"Governed Data Products"| adls
-        api -->|"Scope-Aware Cache"| cache
+        api -->|"Authorization-Scope-Aware Cache"| cache
 
-        outbox -.->|"Usage & Audit Events"| events
-        events -.->|"Streaming Ingestion"| dbsql
-        dbsql -.->|"Usage Aggregates"| adls
-        adls -.->|"Reconciled Usage"| reporting
+        outbox -->|"Durable State"| sql
+        outbox -.->|"Usage / Audit / Trace Events"| events
+        events -.->|"Streaming Processing"| dbproc
+        dbproc -.->|"Curated Event History"| adls
+        events -.->|"Operational / Security Events"| monitor
+        adls -.->|"Reconciled Usage and Audit Data"| reporting
     end
 
     user -->|"HTTPS"| gateway
-    react -.->|"Sign-in"| entra
-    entra -.->|"JWT / Application Group Claims"| api
 
     classDef user fill:#e7f6eb,stroke:#008a00,stroke-width:1.5px,color:#1a1a1a;
     classDef app fill:#eef7ee,stroke:#008a00,stroke-width:1.5px,color:#1a1a1a;
+    classDef control fill:#f3f7e8,stroke:#708b1e,stroke-width:1.5px,color:#1a1a1a;
     classDef azure fill:#e7f0f9,stroke:#205e91,stroke-width:1.5px,color:#1a1a1a;
     classDef data fill:#fff6e0,stroke:#b77800,stroke-width:1.5px,color:#1a1a1a;
     classDef telemetry fill:#f3eafa,stroke:#6f42a5,stroke-width:1.5px,color:#1a1a1a;
 
     class user user;
-    class react,api,policy,planner app;
+    class react,api,planner,answer,reviewer,sandbox app;
+    class safety,policy control;
     class gateway,entra,mi,openai,search,cache azure;
-    class sql,dbsql,adls data;
-    class meter,outbox,events,reporting telemetry;
+    class sql,dbsql,dbproc,adls data;
+    class meter,audit,trace,outbox,events,monitor,reporting telemetry;
 
     style azure fill:#ffffff,stroke:#64a878,stroke-width:2px,stroke-dasharray:6 4
     style hosting fill:#ffffff,stroke:#9ab7a7,stroke-width:1.5px,stroke-dasharray:5 4
+    style platform fill:#ffffff,stroke:#8eaac0,stroke-width:1.5px,stroke-dasharray:5 4
+    style operations fill:#ffffff,stroke:#9c78bd,stroke-width:1.5px,stroke-dasharray:5 4
