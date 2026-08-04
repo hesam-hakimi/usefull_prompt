@@ -1,108 +1,155 @@
-TEST MODE: READ-ONLY FINAL CAPABILITIES AND STTM VERSION ACCEPTANCE TEST
+Fix the incorrect clarification behavior for this question:
 
-Expected active Extension version:
-0.3.137
+“How are total savings balances changing MoM?”
 
-Do not create, modify, publish, deploy, onboard, register, run, or write any
-file.
+Treat this as a focused production defect. Create a dedicated bugfix branch, keep the change bounded, and do not mix it with unrelated roadmap or metadata work.
 
-Authoritative STTM:
-sttm/CD-Renewal_DataMapping_V2.2 1.xlsx
+## Observed behavior
 
-1. Call etl_capabilities.
+The runtime trace shows:
 
-Report:
-- active Extension ID and version;
-- active status;
-- selected workspace root;
-- target classification;
-- etl_interpret_sttm registered;
-- runtimeReady;
-- available;
-- blockers;
-- active input schema, including referenceIds, sheet, and range.
+- selected_intent: `balance_trends_by_product`
+- route/path: `primary_source_sql`
+- planned recipe: `source_balance_mom_change`
+- renderer: `source_balance_mom_change`
+- source table: `dbo.v_dlv_dep_agmt_clr`
+- measures include:
+  - `SUM(CUR_BAL_AMT)`
+  - `balance_change`
+  - `mom_pct_change`
+- time policy: latest/current versus previous month
+- `source_balance_mom_sql` returns:
 
-Stop with FAIL_ACTIVE_VERSION if the active version is not exactly 0.3.137.
+  “Source account balances are snapshot values; choose one balance per account snapshot before summing portfolio balances.”
 
-2. Call etl_interpret_sttm using the exact workspace-relative STTM.
+- `error_handler_regular` converts this internal data-grain/safety failure into `ASK_CLARIFICATION`.
+- The UI then incorrectly asks whether the user wants individual snapshot balances or average balances.
 
-3. Perform targeted retrieval for:
+The user’s question is not ambiguous. “Total savings balances changing MoM” means the total authorized savings balance at the latest available monthly snapshot compared with the previous available monthly snapshot.
 
-- BR_0003
-- TR_0003
-- BR_0007
-- TR_0007
+## Required investigation
 
-For every rule return:
+1. Search the repository for these exact values and trace the complete live path:
 
-- exact current text;
-- current version;
-- current version date;
-- current sheet/row/cell or range;
-- exact previous text;
-- previous version;
-- previous version date;
-- previous sheet/row/cell or range.
+   - `source_balance_mom_change`
+   - `source_balance_mom_sql`
+   - `balance_trends_by_product`
+   - `Source account balances are snapshot values`
+   - `ASK_CLARIFICATION`
 
-Expected evidence:
+2. Inspect the relevant implementation and tests, especially:
 
-BR_0003 and TR_0003:
-- current version: 2.2
-- current date: 2026-04-06
-- previous version: 2.1
-- previous date: 2025-11-20
-- current and previous text must be separate and complete.
+   - `semantic_models.py`
+   - `query_recipes.py`
+   - `orchestrator.py`
+   - error-handling/triage code
+   - source-code mappings
+   - SQL safety and duplicate-balance guards
+   - answer renderers
+   - golden-question fixtures
 
-BR_0007 and TR_0007:
-- current version: 1.4
-- current date: 2025-04-15
-- previous: null unless the workbook contains authoritative prior content.
+3. Run read-only diagnostics against the source to determine the actual grain of
+   `dbo.v_dlv_dep_agmt_clr`.
 
-4. Confirm:
-- current and previous text are not concatenated;
-- version numbers and dates are associated with the correct text;
-- no artificial truncation exists;
-- no workbook content is requested from the user;
-- no external/sample/source path is accessed;
-- no file is written.
+4. Check for duplicates at the expected account-snapshot grain, using the governed keys already established by the repository, likely including:
 
-5. Re-evaluate the TR_0003 versus TR_0007 label conflict using the exact current
-texts. Report the conflict only. Do not resolve the business decision and do
-not generate aggregation SQL.
+   - source code
+   - agreement/account identifier
+   - snapshot date
 
-Return:
+5. Identify why multiple rows can exist for one account and one snapshot. Do not invent a tie-breaker, `MAX`, `AVG`, or arbitrary `ROW_NUMBER()` ordering without evidence from schema, existing recipes, metadata, or a documented business rule.
 
-## Test Status
-## Active Runtime
-## Capability Result
-## Active Tool Schema
-## BR_0003 Versioned Retrieval
-## TR_0003 Versioned Retrieval
-## BR_0007 Versioned Retrieval
-## TR_0007 Versioned Retrieval
-## Version Conflict Evidence
-## Files Written
-## Acceptance Verdict
+6. Verify the existing governed source mapping for “savings.” Existing documentation may map savings to `STAX` and checking/DDA to `IMSB`; confirm this from the live repository and metadata. Do not duplicate source-code mappings in orchestration code.
 
-Files Written must be:
+## Required behavior
 
-None
+For a valid savings MoM request:
 
-Acceptance criteria:
+1. Resolve the requested source scope to savings.
+2. Determine the latest available monthly snapshot.
+3. Determine the previous available monthly snapshot according to the existing governed time policy.
+4. Select exactly one valid balance per account per snapshot using a documented and deterministic account-snapshot rule.
+5. Apply authorization and row-level scope before aggregation.
+6. Sum the authorized account balances separately for the current and previous snapshots.
+7. Calculate:
+   - current total balance;
+   - previous total balance;
+   - absolute month-over-month change;
+   - percentage month-over-month change.
+8. Return a direct answer/report with the two snapshot dates and appropriate caveats.
+9. Do not ask the user whether they want an average balance; the request explicitly asks for total balance.
+10. If the previous snapshot is unavailable, return a governed insufficient-history/no-data response.
+11. If the underlying source does not provide a deterministic way to choose one row per account snapshot, return a controlled data-quality error for owner review. Do not misrepresent that technical problem as user ambiguity.
 
-1. Active version is 0.3.137.
-2. etl_capabilities is callable.
-3. etl_capabilities reports active-runtime evidence.
-4. STTM parser is registered, runtime-ready, and available.
-5. Targeted retrieval schema is exposed.
-6. BR_0003 current and previous text are separate and complete.
-7. TR_0003 current and previous text are separate and complete.
-8. BR_0007 correctly reports no previous version when none exists.
-9. TR_0007 correctly reports no previous version when none exists.
-10. Version/date provenance is correctly associated.
-11. No artificial truncation exists.
-12. No workbook content was requested from the user.
-13. No external or sample path was accessed.
-14. No files were written.
+## Safety requirements
 
-PASS requires all 14 criteria.
+- Do not disable or weaken the duplicate-balance safeguard.
+- Do not sum duplicate snapshot rows.
+- Do not average account balances merely to bypass the guard.
+- Do not hardcode this exact question wording.
+- Do not hardcode source mappings in the orchestrator when they belong in metadata/configuration.
+- Preserve read-only SQL, authorization checks, row-level filtering, limits, and audit behavior.
+- Ensure the same security scope is applied before computing totals, percentages, charts, reports, or cached results.
+- Do not expose raw customer/account data in logs or evidence.
+
+## Error-classification correction
+
+Update the error flow so that it distinguishes:
+
+- genuine user ambiguity → `need_clarification`;
+- missing history/no data → governed no-data response;
+- unresolved source-data grain or duplicate records → data-quality/blocked response;
+- safe deterministic MoM result → normal successful answer.
+
+The specific snapshot-grain error must not automatically become a user clarification question.
+
+## Regression tests
+
+Add targeted tests for:
+
+1. “How are total savings balances changing MoM?”
+2. “How did total savings balance change month over month?”
+3. Checking/DDA MoM using its governed source mapping.
+4. Total deposits across all approved sources where supported.
+5. Duplicate physical rows representing one account snapshot.
+6. Multiple accounts at current and previous snapshots.
+7. Previous balance equal to zero.
+8. Missing previous-month snapshot.
+9. No savings data.
+10. Unauthorized user or restricted row scope.
+11. Same question through the suggested-question path.
+12. Same question through a free-form wording variation.
+13. Verification that the result is total balance, not average balance.
+14. Verification that the incorrect clarification is no longer returned.
+
+Add the exact question to the golden regression suite.
+
+## Validation
+
+Run:
+
+- targeted recipe and orchestrator tests;
+- SQL safety and authorization tests;
+- the full backend suite with coverage;
+- offline golden baseline;
+- live golden baseline including this question;
+- frontend tests if response status or rendering changes;
+- lint/build where applicable;
+- `git diff --check`.
+
+## Completion report
+
+At the end report:
+
+- confirmed root cause;
+- actual source-table grain;
+- duplicate pattern found;
+- governed one-row-per-account-snapshot rule used;
+- files changed;
+- before/after routing and error behavior;
+- generated SQL structure before and after, with sensitive literals redacted;
+- targeted and full test results;
+- live result for the exact question;
+- any remaining data-owner decision.
+
+Do not merge the PR. Do not claim success unless the exact live question returns a correct MoM answer without the inappropriate clarification.
