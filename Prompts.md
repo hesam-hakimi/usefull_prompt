@@ -1,77 +1,88 @@
-The previous Mermaid diagram is technically correct, but it is too implementation-oriented.
 
-Redesign it from the perspective of an Enterprise Azure Architect.
+Keep the current Mermaid diagram.
 
-Goals
+Do NOT redesign it.
 
-1. Optimize for executive presentations.
+Only refine it.
 
-2. Minimize text inside each node.
+Required changes
 
-3. Show architecture, not implementation.
+1. Remove "Business Orchestrator".
 
-4. Every Azure service should appear only once.
+2. Replace it with "FastAPI API".
 
-5. The diagram should immediately communicate the overall architecture in less than 10 seconds.
-
-Use this visual hierarchy
+3. Show communication as
 
 Users
-
 ↓
-
-Presentation Layer
-
-↓
-
-Application Layer
-
-↓
-
-Azure Cloud
-
-↓
-
-Data Platform
-
-Keep node labels short.
-
-Example
-
 React SPA
-
+↓
+HTTPS REST API
+↓
 FastAPI API
 
-Azure OpenAI
+4. Move Azure AI Search out of the Data Platform.
 
-Azure SQL
+Azure Cloud should contain
 
-Azure AI Search
+- Microsoft Entra ID
+- Managed Identity
+- Azure OpenAI
+- Azure AI Search
 
-Microsoft Entra ID
+Data Platform should contain
 
-Managed Identity
+- Azure SQL
 
-Avoid long descriptions inside nodes.
+5. Keep Azure SQL as the only data platform component.
 
-Instead, use edge labels.
+6. Keep node labels short.
 
-Example
+7. Remove unnecessary implementation terminology.
 
-FastAPI -->|Managed Identity| Azure SQL
+8. Keep the same visual style.
 
-FastAPI -->|Semantic Search| Azure AI Search
+9. Keep the same colors.
 
-FastAPI -->|LLM| Azure OpenAI
+10. Keep the same layout.
 
-FastAPI -->|REST| React
+11. Produce presentation-quality Mermaid.
 
-Group Azure services into a single Azure Cloud.
+---
 
-Reduce the total node count.
+Save the output instead of printing it in chat.
 
-Improve readability.
+Create the following file if it does not already exist:
 
-Return ONLY Mermaid.
+docs/presentations/architecture/current/current_architecture.mmd
 
-Do not explain.
+The file must contain:
+
+- Mermaid flowchart
+- Title
+- Legend
+- Short description at the top
+
+Also generate a Markdown preview file:
+
+docs/presentations/architecture/current/current_architecture.md
+
+The Markdown file should contain:
+
+# Current Architecture
+
+A short description.
+
+Then embed the Mermaid diagram using
+
+```mermaid
+...
+```
+
+Finally, reply ONLY with:
+
+- Files created
+- File paths
+- Any validation errors
+
+Do NOT print the Mermaid diagram in chat.
