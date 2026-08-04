@@ -8,7 +8,13 @@ flowchart LR
             direction TB
             react["React SPA<br/>Static HTML / CSS / JS"]
             api["FastAPI Backend<br/>REST API"]
+            safety["Pre-LLM Validation<br/>& Cost Guard"]
+            audit["Minimum User / Query<br/>Data-Access Audit"]
+            trace["JSON Trace<br/>& Quality Evidence"]
             react -->|"HTTPS REST API"| api
+            api -->|"Validate Before Model Call"| safety
+            api -->|"Audit Event"| audit
+            api -.->|"Diagnostic Event"| trace
         end
 
         entra["Microsoft Entra ID"]
@@ -20,12 +26,17 @@ flowchart LR
         adls["ADLS Gen2<br/>Governed Data Products"]
 
         api -->|"Uses"| mi
-        mi -->|"Managed Identity"| openai
-        mi -->|"Managed Identity"| search
-        mi -->|"Managed Identity"| sql
-        mi -->|"Approved Workload Identity"| dbsql
-        api -->|"Analytical SQL"| dbsql
+        safety -->|"Approved Model Request"| openai
+        api -->|"Metadata Retrieval"| search
+        api -->|"Control / Metadata"| sql
+        audit -->|"Audit Records"| sql
+        api -->|"Governed Analytical SQL"| dbsql
         dbsql -->|"Reads Governed Data"| adls
+
+        mi -.->|"Authentication"| openai
+        mi -.->|"Authentication"| search
+        mi -.->|"Authentication"| sql
+        mi -.->|"Approved Workload Identity"| dbsql
     end
 
     user -->|"HTTPS"| react
@@ -34,13 +45,17 @@ flowchart LR
 
     classDef user fill:#e7f6eb,stroke:#008a00,stroke-width:1.5px,color:#1a1a1a;
     classDef app fill:#eef7ee,stroke:#008a00,stroke-width:1.5px,color:#1a1a1a;
+    classDef control fill:#f3f7e8,stroke:#708b1e,stroke-width:1.5px,color:#1a1a1a;
     classDef azure fill:#e7f0f9,stroke:#205e91,stroke-width:1.5px,color:#1a1a1a;
     classDef data fill:#fff6e0,stroke:#b77800,stroke-width:1.5px,color:#1a1a1a;
+    classDef telemetry fill:#f3eafa,stroke:#6f42a5,stroke-width:1.5px,color:#1a1a1a;
 
     class user user;
     class react,api app;
+    class safety control;
     class entra,mi,openai,search azure;
     class sql,dbsql,adls data;
+    class audit,trace telemetry;
 
     style sprucex fill:#ffffff,stroke:#64a878,stroke-width:2px,stroke-dasharray:6 4
     style hosting fill:#ffffff,stroke:#9ab7a7,stroke-width:1.5px,stroke-dasharray:5 4
