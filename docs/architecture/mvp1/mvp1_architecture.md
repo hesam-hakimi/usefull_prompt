@@ -1,108 +1,136 @@
 # askAlpha — MVP1 SpruceX Architecture
 
-**Status:** Planned / dependent on access, onboarding, and pilot quality evidence
+**Status:** Planned / dependent on access, data-product onboarding, and approval  
+**Baseline dependency:** This view evolves the verified current architecture. It does not redefine current hosting, identity, or model-access behavior without new repository/platform evidence.
 
-This diagram shows the intended MVP1 state after SpruceX onboarding and approved access to the initial governed data products. It preserves the current App Service boundary while adding Databricks and ADLS for analytical execution and introducing the minimum safety, audit, and quality evidence required for controlled business-user testing.
+MVP1 keeps React static assets and FastAPI in one Azure App Service package, preserves the browser-MSAL-bearer-token flow, and adds approved access to initial Databricks/ADLS governed data products. It also introduces the minimum audit and quality controls required before broader business testing with restricted data.
 
 ## Architecture diagram
 
 ```mermaid
 flowchart LR
-    user["Business Users"]
+    user["Business User<br/>Browser"]
 
-    subgraph sprucex["SpruceX / Azure Environment"]
+    subgraph sprucex["MVP1 SpruceX / Azure environment — planned"]
         direction LR
 
-        subgraph hosting["Azure App Service (ASP)"]
+        subgraph app["Azure App Service package"]
             direction TB
-            react["React SPA<br/>Static HTML / CSS / JS"]
-            api["FastAPI Backend<br/>REST API"]
-            safety["Pre-LLM Validation<br/>& Cost Guard"]
-            audit["Minimum User / Query<br/>Data-Access Audit"]
-            trace["JSON Trace<br/>& Quality Evidence"]
-            react -->|"HTTPS REST API"| api
-            api -->|"Validate Before Model Call"| safety
-            api -->|"Audit Event"| audit
-            api -.->|"Diagnostic Event"| trace
+            react["Packaged React build<br/>Static HTML / CSS / JS"]
+            api["FastAPI / Uvicorn<br/>JSON REST + SSE"]
+            runtime["Primary + fallback orchestration"]
+
+            subgraph controls["Planned MVP1 in-process controls"]
+                safety["Strengthened request safety"]
+                audit["User / query / data / export audit writer"]
+                quality["Golden + unseen evaluation<br/>Baseline reconciliation"]
+            end
+
+            react -->|"Same-origin HTTPS<br/>REST or SSE + Bearer JWT"| api
+            api --> runtime
+            api -.-> safety
+            api -.-> audit
+            runtime -.-> quality
         end
 
-        entra["Microsoft Entra ID"]
-        mi["Managed Identity"]
-        openai["Azure OpenAI"]
-        search["Azure AI Search<br/>Metadata Retrieval"]
-        sql["Azure SQL<br/>Control Plane"]
+        entra["Microsoft Entra ID / JWKS"]
+        mi["Approved workload identity<br/>Managed Identity where supported"]
+        openai["Azure OpenAI<br/>Approved model access"]
+        search["Azure AI Search<br/>Conditional metadata grounding"]
+        sql["Azure SQL<br/>Control plane + audit records"]
         dbsql["Azure Databricks<br/>SQL Warehouse"]
-        adls["ADLS Gen2<br/>Governed Data Products"]
+        adls["ADLS Gen2<br/>Governed data products"]
 
         api -->|"Uses"| mi
-        safety -->|"Approved Model Request"| openai
-        api -->|"Metadata Retrieval"| search
-        api -->|"Control / Metadata"| sql
-        audit -->|"Audit Records"| sql
-        api -->|"Governed Analytical SQL"| dbsql
-        dbsql -->|"Reads Governed Data"| adls
+        mi --> openai
+        mi --> search
+        mi --> sql
+        mi --> dbsql
 
-        mi -.->|"Authentication"| openai
-        mi -.->|"Authentication"| search
-        mi -.->|"Authentication"| sql
-        mi -.->|"Approved Workload Identity"| dbsql
+        runtime -->|"Current/control queries"| sql
+        runtime -.->|"Fallback grounding"| search
+        runtime -->|"Model calls"| openai
+        runtime -->|"Governed analytical SQL"| dbsql
+        dbsql -->|"Reads governed data"| adls
+        audit -->|"Durable MVP audit records"| sql
     end
 
-    user -->|"HTTPS"| react
-    react -.->|"Sign-in"| entra
-    entra -.->|"JWT / Application Group Claims"| api
+    user -->|"HTTPS GET / and /assets/*"| react
+    user -.->|"MSAL login / token acquisition"| entra
+    api -.->|"JWKS + issuer/audience/scope validation"| entra
 
-    classDef user fill:#e7f6eb,stroke:#008a00,stroke-width:1.5px,color:#1a1a1a;
+    classDef actor fill:#e7f6eb,stroke:#008a00,stroke-width:1.5px,color:#1a1a1a;
     classDef app fill:#eef7ee,stroke:#008a00,stroke-width:1.5px,color:#1a1a1a;
-    classDef control fill:#f3f7e8,stroke:#708b1e,stroke-width:1.5px,color:#1a1a1a;
-    classDef azure fill:#e7f0f9,stroke:#205e91,stroke-width:1.5px,color:#1a1a1a;
+    classDef control fill:#f7f7f7,stroke:#777777,stroke-width:1.2px,color:#1a1a1a;
+    classDef identity fill:#e7f0f9,stroke:#205e91,stroke-width:1.5px,color:#1a1a1a;
     classDef data fill:#fff6e0,stroke:#b77800,stroke-width:1.5px,color:#1a1a1a;
-    classDef telemetry fill:#f3eafa,stroke:#6f42a5,stroke-width:1.5px,color:#1a1a1a;
+    classDef ai fill:#eef3ff,stroke:#205e91,stroke-width:1.5px,color:#1a1a1a;
 
-    class user user;
-    class react,api app;
-    class safety control;
-    class entra,mi,openai,search azure;
+    class user actor;
+    class react,api,runtime app;
+    class safety,audit,quality control;
+    class entra,mi identity;
     class sql,dbsql,adls data;
-    class audit,trace telemetry;
+    class openai,search ai;
 
     style sprucex fill:#ffffff,stroke:#64a878,stroke-width:2px,stroke-dasharray:6 4
-    style hosting fill:#ffffff,stroke:#9ab7a7,stroke-width:1.5px,stroke-dasharray:5 4
+    style app fill:#ffffff,stroke:#9ab7a7,stroke-width:1.5px,stroke-dasharray:5 4
+    style controls fill:#ffffff,stroke:#999999,stroke-width:1.1px,stroke-dasharray:3 3
 ```
 
-## MVP1 quality and audit gates
+## What MVP1 adds to the verified current baseline
 
-MVP1 is not complete merely because connectivity to a data product works. The pilot must also demonstrate:
+- SpruceX onboarding and approved network/firewall path.
+- DAC/data-product approval and identity mapping.
+- One initial Azure Databricks SQL Warehouse analytical execution path.
+- ADLS-backed governed data products.
+- Source-qualified authorization for the pilot data product.
+- Durable minimum audit for user, question, authorization scope, accessed objects, result/export action, and outcome.
+- Golden and unseen-question evaluation, including reconciliation against trusted source queries or baseline reports.
+- Explicit hallucination/error taxonomy and approved acceptance thresholds.
+- Bounded reviewer retries, timeout, token budget, and safe-stop behavior.
+- Hardened visualization code execution where code-based charts are enabled.
 
-- application-level validation before every model/gateway call;
-- fail-closed authorization for the selected source, dataset, objects, fields, and row scope;
-- minimum user/query/data-access audit tied to a trusted request ID;
-- reviewed golden questions and unseen questions;
-- comparison against existing trusted reports or source queries;
-- expected semantic-plan and SQL characteristics;
-- hallucination/error classification and release thresholds;
-- bounded reviewer feedback loops with observable stop conditions;
-- safe visualization-sandbox controls where generated code is used;
-- clear disclosure of data coverage, known limitations, and freshness.
+## Current behavior that remains unchanged unless separately approved
 
-Broad business-user testing with restricted data must not begin until the audit and authorization gates are satisfied.
+- React remains packaged static output served by FastAPI in the same App Service package.
+- The browser obtains an Entra token through MSAL and sends the bearer token to FastAPI.
+- FastAPI validates JWTs using Entra JWKS and resolves effective authorization.
+- JSON and SSE remain the browser/API response mechanisms.
+- Azure AI Search remains conditional fallback metadata grounding, not the primary analytical engine.
+- Current model calls go directly to Azure OpenAI. An enterprise model gateway must not be shown or introduced without explicit platform/IAM approval and repository implementation evidence.
 
-## Assumptions and evidence boundary
+## MVP1 dependencies and open confirmations
 
-- MVP1 depends on SpruceX access, networking/firewall readiness, DAC approvals, data-product onboarding, and an approved App Service-to-Databricks identity.
-- Azure SQL remains the control plane; Databricks SQL becomes the analytical execution engine for onboarded data products.
-- The audit shown here is the minimum MVP1 control. The final enterprise architecture keeps user/data/export audit, agent/LLM trace, and model-usage metering as separate correlated streams.
-- Cross-source joins, advanced caching, Event Hubs, formal chargeback, broad self-service publishing, and rich dashboards are outside this MVP1 view.
-- This is planned architecture and must not be described as already implemented.
-- Report-rationalization commitments must be based on reconciled pilot evidence, not only on a successful demonstration.
+- SpruceX user and service access.
+- Firewall/private-network reachability.
+- DAC approval and named data owners.
+- Availability of Databricks SQL Warehouse and Unity Catalog capabilities.
+- Approved App Service-to-Databricks workload identity.
+- Catalog/schema/object authorization model.
+- Data freshness, reconciliation, and pilot SLO.
+- Audit retention, access, and SIEM/monitoring destination.
 
-## Communication summary
+## Explicitly outside this MVP1 view
 
-- Browser access uses HTTPS.
-- React communicates with FastAPI through an HTTPS REST API.
-- Microsoft Entra ID provides user authentication.
-- The backend validates the token and authorization context.
-- Requests are validated before model calls.
-- Azure service access uses Managed Identity or another explicitly approved workload identity.
+- Cross-source joins.
+- Redis as a required runtime dependency.
+- Event Hubs, durable outbox, and enterprise-scale telemetry pipeline.
+- Formal showback or chargeback.
+- Application Gateway/WAF unless separately approved for this stage.
+- Rich Power BI replacement or pixel-perfect reporting.
 
-See `docs/plans/SAFETY_OBSERVABILITY_AUDIT_AND_QUALITY_ADDENDUM.md` for the controlling requirements.
+## MVP1 exit evidence
+
+MVP1 is not complete merely because a database connection succeeds. Exit requires:
+
+1. authenticated and authorized pilot-user access;
+2. one governed data product queried through the approved Databricks path;
+3. fail-closed object and row-scope behavior;
+4. durable user/query/data/export audit evidence;
+5. golden and unseen-question thresholds;
+6. baseline reconciliation;
+7. sandbox-security evidence for code-generated visualization;
+8. bounded reviewer/model-call behavior;
+9. operational diagnostics and rollback evidence;
+10. explicit Product, Data, Security, Architecture, QA, Platform, and Operations sign-off for the pilot.
