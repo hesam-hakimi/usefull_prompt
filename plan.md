@@ -1,63 +1,78 @@
-Create a separate minimal CODEOWNERS bootstrap pull request.
+Simplify CODEOWNERS for the current project stage.
 
 Repository:
 TD-Enterprise/kmai-td-genie
 
-Target branch:
-main
+Pull request:
+#9
 
-Purpose:
-Make CODEOWNERS effective from the base branch before PR #7 is formally reviewed.
+Branch:
+governance/codeowners-bootstrap
 
-Requirements:
+Current situation:
 
-1. Use authenticated GitHub source of truth.
-2. Protect the user's existing dirty checkout by using an isolated worktree.
-3. Fetch the latest origin/main.
-4. Create a new branch:
+- The proposed organization teams do not exist.
+- GitHub reports Unknown owner errors.
+- For the current development stage, Hesam Hakimi is the temporary sole
+  repository owner and reviewer.
+- We want to remove the team-provisioning blocker and proceed quickly.
 
-   governance/codeowners-bootstrap
+Instructions:
 
-5. Copy only the reviewed CODEOWNERS rules from PR #7.
-6. Do not include any Phase 0 code, documentation, architecture, dependency,
-   workflow, or product changes.
+1. Update only the CODEOWNERS file.
+
+2. Remove every unresolved or unknown team/user owner.
+
+3. Use this verified GitHub user as the temporary owner for all repository
+   paths:
+
+   @hesam-hakimi
+
+4. Keep the file simple. Prefer:
+
+   * @hesam-hakimi
+
+5. Add only narrowly justified exceptions if technically required, but every
+   rule must still use @hesam-hakimi.
+
+6. Add a comment at the top:
+
+   # Temporary bootstrap ownership for the initial project stage.
+   # Replace with approved enterprise teams before broad Beta or Production.
+
 7. Validate:
+
    - CODEOWNERS syntax;
-   - referenced path coverage;
-   - referenced users/teams where GitHub access permits;
-   - git diff --check.
-8. Confirm coverage for:
-   - backend;
-   - frontend;
-   - tests;
-   - authentication;
-   - authorization;
-   - SQL safety;
-   - deployment/workflows;
-   - Phase 0 evidence;
-   - CODEOWNERS itself;
-   - .github files where appropriate.
-9. Commit with:
+   - zero Unknown owner errors;
+   - @hesam-hakimi exists;
+   - @hesam-hakimi has sufficient repository access;
+   - all repository paths are covered;
+   - git diff --check passes;
+   - PR #9 contains only CODEOWNERS.
 
-   chore: bootstrap CODEOWNERS
+8. Amend or create the required commit on the existing PR #9 branch.
 
-10. Push without force.
-11. Create a small draft PR targeting main.
-12. Do not merge.
-13. Do not modify PR #7.
-14. Do not change repository settings.
+9. Push normally without force push unless updating the existing branch
+   technically requires a standard fast-forward push.
+
+10. Keep PR #9 as Draft only if GitHub still reports an owner or syntax error.
+    Otherwise report whether it is safe to mark Ready for Review.
+
+11. Do not merge automatically.
+12. Do not modify PR #7.
+13. Do not change repository settings.
 
 Return:
 
-# CODEOWNERS Bootstrap PR
+# Simplified CODEOWNERS Result
 
-- Base SHA
-- Branch
+- Owner used
+- Unknown owner count before
+- Unknown owner count after
+- CODEOWNERS content
 - Commit SHA
-- Pull request URL
-- Exact file changed
+- PR #9 head SHA
 - Validation result
-- Referenced teams/users verified
-- Safe to mark Ready for Review: YES/NO
-- Safe to merge: YES/NO
+- Safe to mark PR #9 Ready for Review: YES/NO
+- Safe to merge PR #9: YES/NO
 - Effect on PR #7 after merge
