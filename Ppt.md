@@ -1,370 +1,240 @@
- # askAlpha Demo Deck
+# askAlpha Demo Deck
 
-Audience: AI2 Team / Business Stakeholders
-
-Purpose:
-Build confidence that askAlpha can reduce reporting effort through conversational analytics.
+**Audience:** Business stakeholders / AI2 team  
+**Purpose:** Demonstrate the current POC honestly, explain business value, and distinguish current capability from MVP1 and target-state commitments.
 
 ---
 
 # Slide 1 — askAlpha
 
-## Stop Searching.
-## Start Asking.
+## Stop Searching. Start Asking.
 
-### Conversational Analytics for Enterprise Data
+### Conversational Analytics for Governed Enterprise Data
 
-askAlpha enables business users to ask questions in natural language and receive trusted answers directly from governed enterprise data.
-
-### Speaker Notes
-
-"Today I don't want to demonstrate another reporting tool.
-
-I want to demonstrate a new way for business users to interact with enterprise data.
-
-Instead of requesting reports and waiting for development, users can simply ask questions in plain English and immediately receive trusted answers."
-
----
-
-# Slide 2 — The Challenge
-
-Business users spend significant time waiting for reports.
-
-- Request a report
-- Wait for development
-- Wait for deployment
-- Wait for changes
-- Repeat
+askAlpha helps authorized business users ask questions in natural language and explore answers without requesting a new operational report for every follow-up.
 
 ### Speaker Notes
 
-"Today, whenever someone has a new business question, the typical process is to request another report.
-
-If the business question changes tomorrow, another report has to be built.
-
-This cycle is expensive and slow.
-
-Business users don't actually want reports.
-
-They want answers."
+“Today we are not presenting another fixed reporting tool. We are demonstrating a conversational way to explore governed data. The purpose of this POC is to show the interaction and collect business feedback—not to claim that every production capability is already complete.”
 
 ---
 
-# Slide 3 — Our Vision
+# Slide 2 — The Business Challenge
 
-Instead of asking for reports...
+- New question → new report request
+- Development and testing lead time
+- Fixed output for a changing need
+- Repeated maintenance and reporting backlog
 
-Business users ask questions.
-
-Examples
-
-- Show delinquent customers under $100K.
-- Applications by product.
-- Top commercial customers.
+## Business users need answers, not a new report for every question.
 
 ### Speaker Notes
 
-"Our vision is very simple.
-
-Instead of designing hundreds of reports for every possible business question, we allow users to ask questions naturally.
-
-Every follow-up question becomes part of the same conversation.
-
-Analytics becomes interactive."
+“Structured and mandatory reports still have an important role. The opportunity is to reduce the operational and ad-hoc reporting workload where users mainly need an answer and the ability to ask a follow-up.”
 
 ---
 
-# Slide 4 — How askAlpha Works
-
-Business User
-
-↓
-
-Authentication
-
-↓
-
-Authorization
-
-↓
-
-Semantic Understanding
-
-↓
-
-Generate Governed SQL
-
-↓
-
-Retrieve Trusted Data
-
-↓
-
-Generate Business Answer
-
-↓
-
-Follow-up Questions
-
-### Speaker Notes
-
-"I'll keep the technical details very high level.
-
-The user authenticates.
-
-The system verifies authorization.
-
-askAlpha understands the business question.
-
-It generates governed SQL.
-
-Retrieves only authorized data.
-
-And returns a trusted answer."
-
----
-
-# Slide 5 — Live Demo
-
-Today's demonstration
-
-✅ Authentication
-
-✅ Natural language questions
-
-✅ Governed SQL generation
-
-✅ Trusted enterprise data
-
-✅ Interactive follow-up questions
-
-### Speaker Notes
-
-"This demo focuses on today's capabilities.
-
-I'll ask a few business questions.
-
-The important thing isn't the exact dataset.
-
-It's demonstrating the overall user experience."
-
----
-
-# Slide 6 — What askAlpha Is
-
-- Conversational Analytics
-- Self-service Insights
-- Dynamic Question Answering
-- Trusted Enterprise Data
-- Business-friendly Experience
-
-### Speaker Notes
-
-"askAlpha is designed for conversational analytics.
-
-Business users shouldn't need SQL.
-
-They shouldn't need to understand schemas or table relationships.
-
-They simply ask business questions."
-
----
-
-# Slide 7 — askAlpha + Power BI
+# Slide 3 — askAlpha and Power BI
 
 | Power BI | askAlpha |
-|----------|-----------|
-| Regulatory Reports | Conversational Analytics |
-| Scheduled Dashboards | Ad-hoc Questions |
-| Fixed Layout | Dynamic Exploration |
-| Executive Dashboards | Interactive Insights |
-| Pixel-perfect Reports | Business Self-Service |
+|---|---|
+| Regulatory and mandatory reports | Conversational analytics |
+| Scheduled dashboards | Ad-hoc questions |
+| Standardized/pixel-perfect layouts | Dynamic exploration |
+| Repeated distribution | Interactive follow-up |
+
+> **Complementary solutions—not a blanket replacement.**
 
 ### Speaker Notes
 
-"This is probably the most important message today.
-
-askAlpha is NOT replacing Power BI.
-
-Power BI remains the right solution for regulatory reporting and structured dashboards.
-
-askAlpha complements Power BI by enabling conversational analytics and business exploration."
+“Power BI remains the right choice for regulatory, scheduled, standardized, and pixel-perfect reporting. askAlpha complements it by helping users explore questions that do not require a fixed dashboard.”
 
 ---
 
-# Slide 8 — Business Value
+# Slide 4 — Our Vision
 
-Instead of
+Instead of requesting another report, users can ask:
 
-"I need another report."
-
-Business users simply ask
-
-- What changed?
-- Why?
-- Show me more.
-- Compare with last month.
-
-Analytics becomes interactive.
+- Show delinquent accounts below $100K.
+- Which region has the highest delinquency?
+- Show fiscal-year applications by product.
+- Compare this month with last month.
+- Drill into the top contributors.
 
 ### Speaker Notes
 
-"This is where the value comes from.
-
-Instead of creating another reporting request,
-
-business users continue asking questions.
-
-Each answer naturally leads to the next business question."
+“One answer can lead naturally to the next question. That is the core difference between a fixed report and conversational exploration.”
 
 ---
 
-# Slide 9 — Example
+# Slide 5 — Current User Experience
 
-Business Question
+```text
+Open the askAlpha URL
+  → Sign in with Microsoft Entra ID
+  → Ask a natural-language question
+  → Receive a governed POC response
+  → Ask a follow-up
+```
+
+No local installation or SQL knowledge is required for the business user.
+
+### Speaker Notes
+
+“The React interface is delivered through the application URL. The browser signs in through Entra and communicates with the FastAPI backend using secure API calls.”
+
+---
+
+# Slide 6 — What the Current POC Demonstrates
+
+- Entra/MSAL sign-in and backend token validation
+- React chat experience
+- JSON and streaming responses
+- Primary deterministic and bounded fallback paths
+- Azure SQL query execution
+- Conditional metadata grounding through Azure AI Search
+- Direct Azure OpenAI model calls
+- Tables, narrative, and visualization paths
+- Authorized debug/diagnostic output
+
+### Speaker Notes
+
+“These are the capabilities supported by the current implementation evidence. We are being careful not to present planned services such as Databricks, Event Hubs, Redis runtime caching, or full audit as current.”
+
+---
+
+# Slide 7 — Demo Scope and Limitations
+
+## Current POC boundary
+
+- Demonstrated against a limited dataset of approximately four tables
+- Quality review is still substantially manual
+- Hallucinations have been observed and require automated evaluation
+- No distributed Redis result cache is active
+- Complete user/data/export audit is not yet implemented
+- Rich visual explainability is future work; current diagnostics are primarily JSON-based
+
+> Any fabricated or illustrative sample data must be visibly labeled.
+
+### Speaker Notes
+
+“This slide is important for setting expectations. The architecture is intended to grow, but the current POC is not enterprise-scale proof. Business validation, audit, authorization, and automated quality gates are part of the next delivery stages.”
+
+---
+
+# Slide 8 — How a Question Is Processed
+
+```text
+Authenticated request
+  → Authorization
+  → Deterministic route when available
+  → Conditional metadata grounding and generated-SQL fallback when needed
+  → SQL safety and authorization validation
+  → Azure SQL execution
+  → Answer and optional follow-up
+```
+
+### Speaker Notes
+
+“The application prefers governed deterministic behavior where possible. The generated-SQL route is a bounded fallback and its SQL is validated before execution.”
+
+---
+
+# Slide 9 — Example Business Question
 
 **How many applications were submitted this fiscal year by product?**
 
-↓
+askAlpha may return:
 
-askAlpha understands the question
-
-↓
-
-Generates governed SQL
-
-↓
-
-Retrieves authorized data
-
-↓
-
-Returns
-
-- Business answer
-- Tabular data
-- Suggested follow-up questions
+- a concise answer;
+- a table by product;
+- a business summary;
+- suggested follow-up questions.
 
 ### Speaker Notes
 
-"The system understands the business question.
-
-Generates SQL.
-
-Retrieves authorized data.
-
-Returns the answer.
-
-Then users can immediately continue exploring."
+“We will validate the result against a trusted source query or existing baseline report. The value is not only the first answer; it is the ability to continue exploring.”
 
 ---
 
-# Slide 10 — Current Capabilities
+# Slide 10 — MVP1 Priorities
 
-Today
-
-- Secure Authentication
-- Authorization
-- Natural Language Queries
-- Governed SQL Generation
-- Trusted Answers
-- Role-aware Experience
-- Follow-up Questions
+- SpruceX access, firewall, DAC, and data-product onboarding
+- Initial Databricks/ADLS governed data-product pilot
+- Fine-grained authorization and row-scope controls
+- Durable user/query/data/export audit
+- Golden and unseen-question evaluation
+- Baseline reconciliation and hallucination thresholds
+- Bounded reviewer behavior
+- Hardened visualization sandbox
 
 ### Speaker Notes
 
-"This is what we're demonstrating today.
-
-These capabilities already exist.
-
-Today's objective is to demonstrate the experience and gather business feedback."
+“MVP1 is not only a connectivity milestone. It must prove security, auditability, quality, and reconciliation for the pilot data product.”
 
 ---
 
-# Slide 11 — Product Roadmap
+# Slide 11 — Target Enterprise Capabilities
 
-Today
-
-- Natural Language Queries
-- Trusted Answers
-- Secure Access
-
-Near Future
-
-- More Data Products
-- More Business Domains
-- Better Visualizations
-
-Future
-
-- Rich Dashboards
-- Advanced Analytics
-- Self-service Metadata
-- Intelligent Business Templates
+- Governed metadata and KPI registry
+- Multiple approved data sources
+- Scope-aware secure caching
+- Agent decision trace and enterprise monitoring
+- Per-call usage metering and showback
+- Event-driven audit/usage processing
+- Governed self-service onboarding
+- Production SLOs, runbooks, recovery, and rollback
 
 ### Speaker Notes
 
-"Today's demo represents the foundation.
-
-As more data products are onboarded, askAlpha scales naturally across the enterprise.
-
-Future phases focus on richer business experiences rather than changing how users interact."
+“These are target capabilities, not current implementation claims. Each remains subject to the roadmap, platform availability, and security/governance approval.”
 
 ---
 
-# Slide 12 — Business Benefits
+# Slide 12 — Business Value
 
-- Faster Decisions
-- Less Report Development
-- Self-service Analytics
-- Trusted Enterprise Data
-- Higher Productivity
-- Reduced Reporting Backlog
+- Faster access to operational insight
+- Fewer avoidable ad-hoc report requests
+- Interactive follow-up
+- Better use of governed data
+- Clearer ownership of KPI and metadata
+- Measurable quality, audit, and cost over time
 
 ### Speaker Notes
 
-"Our objective isn't to build another reporting platform.
-
-Our objective is to reduce manual reporting effort while empowering business users with trusted self-service analytics."
+“The goal is not to maximize the number of AI features. It is to deliver trusted self-service analytics while reducing unnecessary reporting effort.”
 
 ---
 
 # Slide 13 — Success Criteria
 
-Business users should be able to
+Business users can:
 
-- Ask questions naturally
-- Receive trusted answers
-- Continue asking follow-up questions
-- Explore data independently
-- Reduce operational reporting
+- ask approved questions naturally;
+- receive authorized and reconcilable answers;
+- understand evidence and limitations;
+- ask follow-up questions;
+- use Power BI when fixed reporting remains appropriate.
+
+The product team can:
+
+- trace and audit use;
+- measure quality and cost;
+- block unsafe behavior;
+- roll back changes safely.
 
 ### Speaker Notes
 
-"Our success isn't measured by how many reports we create.
-
-It's measured by how independently business users can explore trusted enterprise data."
+“Success is not simply that the application generates an answer. Success means the answer is authorized, testable, auditable, supportable, and useful.”
 
 ---
 
-# Slide 14 — Vision
+# Slide 14 — Closing
 
-# Stop Searching.
+## Stop Searching. Start Asking.
 
-# Start Asking.
-
-Talk to your data.
+### Ask better. Decide faster—using governed data.
 
 ### Speaker Notes
 
-"I'd like to leave you with one simple message.
-
-askAlpha changes the way business users interact with enterprise data.
-
-Instead of searching through reports,
-
-simply ask.
-
-Thank you.
-
-We're happy to answer any questions."
+“Today’s POC shows the direction and current interaction. The next step is to validate the pilot against real governed data products with the required security, audit, and quality controls.”
