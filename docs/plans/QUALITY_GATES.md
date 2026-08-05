@@ -1,42 +1,76 @@
 # askAlpha — Quality Gates and Acceptance Standard
 
-This document defines the controls that make quality enforceable for human developers and GitHub Copilot agents.
+**Status:** Revision 1.6 — mandatory controls for human developers and implementation agents
 
 ## 1. Mandatory engineering rules
 
 1. Never implement directly on the protected default branch.
-2. Never remove a legacy path before parity, telemetry, rollback, and approval exist.
-3. Never introduce a new business mapping in a prompt or orchestration branch when it belongs in governed metadata.
-4. Never execute unvalidated generated SQL.
-5. Never expose unauthorized schema, metadata, prompts, SQL, result values, group claims, or traces.
-6. Never enable mock authentication in a hosted production environment.
-7. Never claim Redis, AI Search, an agent, model usage, or token usage is active/observed unless verified in the live path.
-8. Never change an API response shape silently.
-9. Never merge a PR that lacks tests, evidence, documentation, and rollback.
-10. Agents may create branches and PRs but may not self-approve or self-merge.
-11. Never trust a client-supplied user, team, department, or cost-center identifier for usage attribution.
-12. Never silently estimate missing provider token usage or treat estimated cost as reconciled/final chargeback.
-13. Never store raw prompts, responses, SQL literals, result rows, secrets, or access tokens in usage-metering fact records.
+2. Never remove a working path before parity, telemetry, rollback, and approval exist.
+3. Never describe a meeting statement, roadmap item, configuration-only value, or diagram as current implementation without private code/config/deployment evidence.
+4. Never depict in-process logic as a standalone deployed service without evidence.
+5. Never show React as a separate deployed runtime while the verified package serves static React assets through FastAPI.
+6. Never reverse the identity flow: browser/MSAL obtains the Entra token; browser sends bearer token; FastAPI validates with Entra JWKS.
+7. Never omit SSE when documenting current chat transport; current chat supports JSON REST and `text/event-stream`.
+8. Never execute unvalidated generated SQL.
+9. Never expose unauthorized metadata, schema, SQL, prompts, traces, result values, group claims, audit records, or usage details.
+10. Never enable mock authentication in an unsafe hosted environment.
+11. Never claim Redis, Databricks, ADLS, Event Hubs, durable outbox, usage collector, LangSmith, Azure Sentinel, Dynatrace, Datadog runtime monitoring, or an enterprise LLM Gateway is current unless live evidence exists.
+12. Never treat current JSON diagnostics as complete user-query/data/export audit.
+13. Never allow metadata instructions or model escalation to weaken authentication, authorization, privacy, SQL safety, limits, redaction, audit, or cost policy.
+14. Never change API response shape silently.
+15. Never merge a PR without tests, evidence, documentation, known limitations, and rollback.
+16. Agents may create branches and PRs but may not self-approve or self-merge.
+17. Never trust client-supplied user, team, department, cost center, authorization scope, token usage, or cost.
+18. Never store raw prompts, responses, SQL literals, result rows, credentials, access tokens, or secrets in usage facts.
+19. Never present estimated or unreconciled cost as final chargeback.
+20. Never cache unrestricted data and filter it only in the UI.
 
-## 2. Test pyramid
+## 2. Evidence-status gate
 
-### Unit tests
+Every architecture/product PR must classify affected components as:
 
-- Registry schema and validation.
-- Auth state machine and route guards.
-- Authorization resolution.
-- SQL AST and business safeguards.
+- Current / implemented
+- Technically validated
+- Observed in POC
+- Configured but unused
+- Partially implemented
+- Planned
+- Target
+- Open for confirmation
+
+### Required evidence for a “Current” claim
+
+At least one direct wired-runtime path plus relevant supporting evidence:
+
+- source code and call graph;
+- dependency/configuration actually consumed by the path;
+- packaging/deployment manifest;
+- target-environment runtime evidence;
+- tests or diagnostic evidence tied to a commit.
+
+A config key by itself is not sufficient.
+
+## 3. Test pyramid
+
+### 3.1 Unit tests
+
+- Auth state, route guards, JWT validation helpers, group-overage behavior.
+- Effective authorization and deny-all behavior.
+- Metadata registry schemas, provenance, lifecycle, and conflict validation.
 - Semantic-plan validation.
-- Renderers and output templates.
-- Cache-key and invalidation logic.
-- Redaction.
-- Provider usage extraction for supported streaming and non-streaming response shapes.
-- `ModelUsageEvent` and request-summary serialization/validation.
-- Effective-dated user/team/department/cost-center hierarchy resolution.
-- Price-catalog version selection and token-cost calculation.
-- Usage-event idempotency and duplicate prevention.
+- SQL AST/read-only/object/join/grain/limit policy.
+- Prompt/request safety policy and reason codes.
+- Reviewer-loop attempt/time/token/cost stop conditions.
+- Visualization sandbox policy, import allowlist, artifact validation, cleanup.
+- Cache key, authorization-scope hash, version invalidation, kill switch.
+- Audit, trace, usage event serialization/redaction/idempotency.
+- Model policy selection and bounded escalation.
+- Provider usage extraction for streaming/non-streaming responses.
+- Hierarchy snapshot and effective-dated price selection.
 
-### Contract tests
+### 3.2 Contract tests
+
+At minimum:
 
 - `/api/config`
 - `/api/auth/profile`
@@ -47,240 +81,228 @@ This document defines the controls that make quality enforceable for human devel
 - `/api/chat/stream`
 - diagnostics endpoints
 - access-management endpoints
-- protected usage-summary, user/team/department/model, reconciliation, and export endpoints
+- future audit/usage/reporting/export endpoints
 
-### Integration tests
+Verify JSON and SSE behavior separately, including client fallback.
 
-- Entra-shaped auth adapter using test fixtures.
-- Azure SQL store initialization and read-only execution.
-- Registry loading, publication, and rollback.
-- Primary deterministic answer path.
-- Fallback generated-SQL path.
-- SQL Server and Databricks adapter execution, timeout, cancellation, diagnostics, and audit.
-- Bulk schema discovery/import, resume/idempotency, validation, publish, rollback, and drift detection.
-- Self-service maker-checker workflow and separation-of-duties enforcement.
-- SSE progress and final response.
-- Access-management change and audit.
-- Multi-agent request with several model calls, retries, repair, fallback, escalation, and review.
-- Streaming final-usage capture, cancellation, timeout, and partial/not-observed usage behavior.
-- Durable outbox retry, dead-letter recovery, and duplicate delivery.
-- Authentication-derived user attribution and effective hierarchy snapshot.
-- Event-to-request-to-daily/monthly aggregate reconciliation.
-- Protected showback/chargeback reporting and export audit.
+### 3.3 Integration tests
 
-### Security tests
+- React static build packaged and served by FastAPI from the App Service artifact.
+- MSAL-shaped browser token flow and backend Entra JWT validation.
+- SQL-backed authorization resolution.
+- Primary deterministic path.
+- Fallback/generated-SQL path using conditional Azure AI Search metadata grounding.
+- Direct Azure OpenAI call path and approved credential behavior.
+- SQL Server/Azure SQL execution, diagnostics, timeout, cancellation, and parity.
+- Databricks pilot execution when implemented.
+- Registry import/validate/publish/rollback/drift.
+- Complete audit-event creation and durable delivery when implemented.
+- Reviewer feedback, retry, safe stop, and final outcome.
+- Visualization sandbox execution, timeout, resource limits, and artifact cleanup.
+- Cache isolation and invalidation when enabled.
+- Usage-event/outbox/reconciliation flow when enabled.
 
-- Mock auth rejected in unsafe environments.
-- Invalid issuer/audience/scope/signature.
-- Missing or malformed group claims.
-- Unauthorized table/view/field.
-- SQL comments, multiple statements, DDL/DML, commands, SELECT INTO, unsafe functions.
-- Duplicate-balance joins.
-- Sensitive debug/log leakage.
-- CSP/CORS/auth redirect configuration.
-- Dependency and secret scans.
-- Attempts to override safety/authorization through metadata instructions.
-- Source-qualified authorization across catalog/database, schema, table/view, and field.
-- Cross-source join attempts when the capability is disabled.
-- Client attempts to spoof subject, team, department, cost center, model, token count, or cost.
-- Unauthorized access to per-user usage, exports, price catalogs, reconciliation, and closed chargeback periods.
-- Usage records and exports checked for prompts, responses, SQL literals, raw claims, secrets, tokens, and result data.
-- Closed monthly chargeback records reject direct edits and require auditable adjustments.
+### 3.4 Security tests
 
-### Golden regression tests
+- Mock auth rejected in unsafe hosted environments.
+- Invalid JWT signature, issuer, audience, scope, user identifier, and group-overage handling.
+- Unauthorized source/dataset/table/view/field/row scope.
+- Metadata and error-message object-name leakage.
+- SQL comments, multiple statements, DDL/DML, unsafe functions, SELECT INTO, bypass attempts.
+- Prompt injection and attempts to override policy through metadata/instructions.
+- Block-before-model behavior for requests eligible for pre-model rejection.
+- Malicious visualization code: network, filesystem, subprocess, package install, environment/credential access, resource exhaustion.
+- Cross-user/cross-scope cache leakage and stale-permission use.
+- Audit spoofing, omission, unauthorized reading/export, and sensitive-field leakage.
+- Client spoofing of identity, hierarchy, model, usage, cost, or authorization version.
+- Cross-source join attempt while disabled.
+- Secret/dependency/static scans.
 
-Cover at minimum:
+### 3.5 Golden and unseen-question evaluation
 
-- balances and trends
-- product/account analytics
-- retail/commercial/other segment breakdowns
-- concentration and FDIC mix
-- originations and attrition
-- deposits versus withdrawals
-- date and time-window variations
-- rankings and top-N
-- ambiguous asks
-- no-data cases
-- unauthorized users
-- visualization requests
-- report requests
-- fallback confirmation and clarification
-- glossary synonyms, acronyms, conflicting definitions, and effective-date changes
-- positive and negative examples with expected semantic plans
-- SQL Server/Databricks parity for portable recipes
-- expected runtime agent/model route and bounded escalation
-- expected number of model calls and request-level token/cost accounting behavior
+Cover:
 
-### Performance tests
+- balances, trends, product/account analytics;
+- retail/commercial/segment breakdowns;
+- concentration, FDIC, originations, attrition, deposits/withdrawals;
+- date/time-window variants;
+- top-N/ranking;
+- ambiguity and clarification;
+- no-data and unauthorized cases;
+- report and visualization requests;
+- deterministic versus fallback route;
+- glossary/acronym/effective-date conflicts;
+- expected source, dataset, semantic plan, fields, joins, grain, filters, and output;
+- SQL Server/Databricks parity for portable plans;
+- expected reviewer/model behavior and bounded call count;
+- reconciliation with trusted source query/report.
 
-- Route-level p50/p95.
+Track hallucination/error severity and require approved thresholds by route/risk.
+
+### 3.6 Performance and resilience tests
+
+- p50/p95 by route.
 - Concurrent authenticated users.
-- Large but permitted result sets.
-- Cancellation and timeout behavior.
-- OpenAI/Azure SQL/AI Search dependency latency.
-- Cache on/off comparison when introduced.
-- Registry performance with hundreds of tables and bounded candidate retrieval.
-- Bulk import and schema-drift processing time.
-- SQL Server versus Databricks route-level latency and cost evidence.
-- Usage instrumentation overhead on streaming and non-streaming requests.
-- Outbox backlog, delivery latency, throughput, and recovery.
-- Aggregate refresh and protected reporting latency at target retention/volume.
+- JSON versus SSE overhead.
+- Large permitted results.
+- query/model cancellation and timeout;
+- retry/circuit-breaker/backpressure behavior;
+- Azure OpenAI/Azure SQL/AI Search latency;
+- Databricks latency/cost when introduced;
+- cache on/off comparison when enabled;
+- instrumentation/audit overhead;
+- outbox backlog/replay/dead-letter recovery;
+- bulk metadata onboarding and drift processing;
+- backup/recovery/canary/rollback.
 
-## 3. Runtime model-routing and usage-metering quality controls
+## 4. Verified-current architecture gate
 
-- Follow `docs/plans/RUNTIME_MODEL_ROUTING_STRATEGY.md` for model selection inside the KMAI server agentic flow.
-- Follow `docs/plans/RUNTIME_USAGE_METERING_AND_CHARGEBACK.md` for per-call metering, hierarchy attribution, aggregation, showback, reconciliation, and chargeback.
-- Runtime agents may not select their own model; the orchestrator resolves a versioned policy.
-- GPT-5.1 is limited to benchmark-approved low-risk tasks such as intent classification, clarification, normalization, and error classification.
-- GPT-5.2 is the default generative workhorse for registry routing, bounded SQL generation, visualization, and ordinary report writing.
-- GPT-5.5 is reserved for documented ambiguity, complexity, sensitive KPI, repeated validation failure, executive review, and other high-risk triggers.
-- Deterministic recipes remain model-free where possible.
-- Model escalation never bypasses authorization, semantic-plan validation, SQL policy, row, scan, time, token, or request-cost limits, or redaction.
-- Retry and escalation counts are bounded by policy.
-- High-risk requests must not silently downgrade to an unapproved weaker fallback during service failure.
-- Model-policy changes require versioning, canary evidence, and rollback.
-- Every actual provider model call—including retry, repair, fallback, escalation, shadow, and review—creates one idempotent usage event or a visible recoverable delivery failure.
-- Each usage event records policy version, requested/actual model, agent, route, reason, attempt, provider-observed token counts, usage status, latency, validation outcome, attribution snapshot, and cost status without sensitive content.
-- A user request summary includes every linked model call, not only the successful final call.
-- User/team/department/cost-center attribution is derived from trusted authenticated backend context and effective-dated hierarchy data.
-- Missing usage or missing hierarchy is a monitored exception; it is not silently assigned or estimated.
-- Showback is required before chargeback. Formal chargeback requires price/hierarchy approval and reconciliation to provider billing.
-- Metering-store failures must not fail the user response, but undelivered events must be durably retried, alerted, and recoverable.
+Before publishing a current architecture update, confirm:
 
-## 4. Pull-request evidence checklist
+- React build path and packaging.
+- FastAPI/Uvicorn startup and static mount.
+- same-origin REST and SSE routes.
+- browser/MSAL → Entra token acquisition.
+- browser → FastAPI bearer-token flow.
+- FastAPI → Entra JWKS validation.
+- primary and fallback orchestrators and wired agents.
+- direct model endpoint versus gateway.
+- Azure SQL current responsibilities.
+- Azure AI Search current route and retrieval type.
+- Managed Identity and any approved credential override.
+- current diagnostics versus durable audit.
+- configured-unused and planned components.
 
-Every implementation PR must include:
+The PR must include a “do not show as current” section.
 
-- Requirement/issue link.
-- Scope and out-of-scope.
-- Current behavior and intended behavior.
-- Architecture or ADR reference.
-- Security and authorization impact.
-- Data/KPI impact.
-- API/metadata compatibility impact.
-- Usage-metering, identity-attribution, privacy, retention, price-catalog, and chargeback impact when applicable.
-- Files changed and why.
-- Tests added and results.
-- Screenshots for user-facing changes.
-- Trace/log evidence with redaction.
-- Migration and feature flag.
-- Rollback steps.
-- Known limitations and follow-ups.
+## 5. Phase 0 closure gate
 
-## 5. Phase gates
+- Final private-PR scope is clean and unrelated roadmap/product edits are excluded.
+- Backend/frontend/golden validation passes on final SHA.
+- Branch protection/ruleset and exact required checks are active.
+- Effective `CODEOWNERS` review exists.
+- Skips/warnings and observability follow-ups are documented.
+- Threat model, data flow, environment matrix, definition of done, evidence, and rollback are attached.
+- Product, Security, Architecture/Engineering, Data, QA, Platform/DevOps, and Operations approvals are recorded.
 
-### Phase 0 gate
+New POC findings do not automatically reopen Phase 0 unless they prove a current security/correctness blocker.
 
-- Dedicated login and protected routing work.
-- Baseline/golden harness exists.
-- CI and contribution controls are active.
-- Threat model is reviewed.
-- Runtime model policy contract, baseline benchmark, trace fields, and rollback are defined.
-- Usage-metering requirements are documented, including authenticated attribution and no-raw-content rules.
+## 6. Broad Beta gate
 
-### Phase 1 gate
+Before restricted-data broad Beta:
 
-- Registry validates, versions, publishes, and rolls back.
-- Compatibility tests pass.
-- Dynamic roles/questions do not require frontend code changes.
+- IAM-approved application/token/group topology.
+- Current architecture revalidated against the target commit/environment.
+- Fine-grained authorization and required row-level security fail closed.
+- User-query audit is durable and active.
+- Data-read/object-access audit is durable and active.
+- Export/download audit is active.
+- Audit delivery failures are visible and recoverable.
+- Golden, unseen-question, and reconciliation thresholds pass.
+- Hallucination/error severity remains within approved threshold.
+- Reviewer iterations, time, token, cost, and repair scope are bounded.
+- Visualization sandbox security corpus passes.
+- No unauthorized or sensitive content appears in logs, traces, audit, or usage facts.
+- deployment smoke, SLO, alert, runbook, rollback, and incident-simulation evidence exists.
+- Product, Security, Architecture, Data, QA, Platform, and Operations approvals are recorded.
 
-### Phase 2 gate
+## 7. Multi-source gate
 
-- Every analytical answer has a valid semantic plan.
-- Ambiguity is surfaced.
-- KPI and template versions are traceable.
+- SQL Server/Azure SQL parity passes through the adapter.
+- Databricks pilot passes identity, authorization, semantic plan, dialect, SQL policy, query, result, audit, timeout, cancellation, quality, and performance tests.
+- Core orchestration has no normal-path source-specific branching.
+- Cross-source joins remain blocked unless separately approved.
+- Technical metadata ownership remains with the data platform; askAlpha business/semantic metadata is governed separately.
 
-### Multi-source gate
+## 8. Cache gate
 
-- SQL Server parity passes through the adapter abstraction.
-- Databricks pilot passes auth, plan, dialect, query, timeout, cancellation, result, and audit tests.
-- Core orchestration has no normal-path source-specific branches.
-- Cross-source joins are blocked unless separately approved.
+If cache is enabled:
 
-### Phase 3 gate
+- authorization is resolved before cache lookup/write;
+- keys include authorization-scope hash and all required policy/data versions;
+- access changes prevent old entries from matching;
+- no unrestricted result is cached for UI filtering;
+- isolation, freshness, invalidation, TTL, kill-switch, and observability tests pass;
+- measured performance/cost benefit justifies the service.
 
-- Unauthorized metadata and SQL are blocked.
-- SQL security corpus passes.
-- No unresolved critical/high security findings.
+## 9. Model-routing and usage gate
 
-### Phase 4 gate
+- Runtime agents cannot select models independently.
+- Policy version, requested/actual model, route, reason, attempts, validation outcome, latency, and provider-observed usage are recorded when implemented.
+- Every retry/repair/fallback/escalation/shadow/reviewer call is included.
+- High-risk requests do not silently downgrade to an unapproved model.
+- Missing usage is observable, not silently estimated.
+- Metering failure does not fail chat; undelivered events remain recoverable.
+- Event/request/daily/monthly totals reconcile.
+- Showback is reviewed before chargeback.
+- Formal chargeback requires provider-bill reconciliation and named Finance/Platform/Product/Security approvals.
 
-- Golden quality thresholds pass.
-- SLO dashboards, alerts, runbooks, and rollback are tested.
-- Logs and traces are redacted.
-- Per-call usage events reconcile to request summaries and missing-usage exceptions are observable.
-- Per-user details and exports are protected and audited.
+## 10. Production release gate
 
-### Phase 5 gate
+- Broad Beta, multi-source, cache, and model/usage gates pass as applicable.
+- Supported production environment and lifecycle ownership confirmed.
+- private endpoint/VNet/DNS/firewall/workload identity validated.
+- capacity, availability, backup, recovery, canary, and rollback tested.
+- audit retention, compliance, records management, and SIEM/monitoring approved.
+- data-product freshness/quality ownership and SLOs confirmed.
+- no unresolved critical/high security findings.
+- source-of-truth documentation updated.
 
-- Performance and cost targets pass.
-- Cache isolation/freshness tests pass if cache is enabled.
-- Aggregates reconcile.
-- Request, daily, monthly, user, team, department, cost-center, model, agent, and route totals reconcile to event-level usage.
-- Price catalog and cost calculations are versioned, effective-dated, and rollback-capable.
-- Showback has been reviewed by Finance/Platform and representative team owners.
-- Chargeback remains disabled until provider-bill reconciliation and required approvals pass.
+## 11. Required PR evidence
 
-### Production release gate
+Every implementation PR includes:
 
-- Product, architecture, security, data, QA, platform, operations, and Finance approvals where chargeback is in scope.
-- Supported production environment confirmed.
-- Compliance, privacy, records-management, and data-classification requirements satisfied.
-- Deployment smoke tests pass.
-- Rollback is ready.
-- Source-of-truth documentation is updated.
+- requirement/issue and traceability-matrix reference;
+- scope/out-of-scope;
+- evidence status of affected components;
+- current and intended behavior;
+- architecture/ADR reference;
+- security/authorization/data/KPI/audit/usage impact;
+- API/metadata compatibility impact;
+- changed files and rationale;
+- tests and results;
+- screenshots for user-facing changes;
+- redacted trace/audit evidence;
+- migration/feature flag;
+- rollback;
+- known limitations and follow-ups.
 
-## 6. Quality metrics
+## 12. Quality metrics
 
 Track at least:
 
-- Golden-answer pass rate.
-- Answer coverage rate.
-- Clarification rate.
-- No-route rate.
-- Fallback rate.
-- SQL validation failure rate.
-- Authorization denial rate.
-- p50/p95 latency by route.
-- Error and timeout rate.
-- Metadata load/publish failure rate.
-- Bulk onboarding throughput and validation failure rate.
-- Schema-drift detection and unresolved impact count.
-- Candidate metadata count per model call.
-- Source/dialect execution success rate.
-- Data freshness failures.
-- Cost per successful answer/report.
-- Quality, structured-output validity, p50/p95 latency, input/output tokens, retries, and cost by runtime agent, model, and policy version.
-- Model escalation, fallback, timeout, and safe-stop rates.
-- Percentage of provider calls with observed, partial, not-observed, or estimated usage.
-- Usage-event delivery success, outbox age, dead-letter count, and duplicate-prevention count.
-- Unattributed user/team/department/cost-center usage rate.
-- Event-to-request and request-to-aggregate reconciliation variance.
-- Estimated-to-provider-bill variance and unresolved reconciliation items.
-- User/team/department budget variance and anomaly count.
-- Showback disputes, chargeback adjustments, and approval-cycle time.
-- User feedback and reopened defects.
-- Change failure rate and mean time to recovery.
+- golden and unseen pass rate;
+- reconciliation variance;
+- hallucination/error rate by severity;
+- answer coverage, clarification, no-route, fallback, and validation-failure rates;
+- authorization denial and audit-delivery failure rates;
+- unaudited export count;
+- p50/p95 latency and timeout/error rate;
+- metadata publish/drift/conflict metrics;
+- source/dialect execution success;
+- cache hit rate, isolation failures, stale-entry prevention;
+- model quality, tokens, latency, retries, escalation, and cost by policy/model/agent/route;
+- usage delivery, outbox age, dead-letter, duplicate prevention, and reconciliation variance;
+- change failure rate and mean time to recovery.
 
-## 7. Stop-the-line conditions
+## 13. Stop-the-line conditions
 
-Pause rollout or disable the affected feature flag when:
+Pause rollout or disable the affected feature when:
 
-- Unauthorized data or metadata may have been exposed.
-- A certified KPI produces unreconciled material differences.
-- SQL safety can be bypassed.
-- Login/auth allows unauthenticated protected access.
-- Logs or usage records contain secrets, tokens, sensitive claims, prompts, responses, SQL literals, result rows, or unredacted business data.
-- Golden regression degrades beyond the approved threshold.
-- A metadata instruction overrides or weakens runtime safety controls.
-- Source routing executes against an unintended engine or unauthorized source.
-- Schema drift invalidates a certified KPI, join, example, or recipe without blocking publication.
-- Error, latency, or cost exceeds the release guardrail.
-- A runtime agent bypasses the centralized model policy or selects its own model.
-- A high-risk request is silently downgraded to an unapproved model.
-- Model routing materially degrades golden-answer quality, SQL validity, authorization behavior, or SLA without automatic rollback.
-- The client can spoof usage attribution or cost fields.
-- Usage events are materially missing, duplicated, unrecoverable, or cannot reconcile to request totals.
-- Per-user reporting or export permissions expose unauthorized employee usage information.
-- Estimated or unreconciled costs are presented as final chargeback.
-- A closed chargeback period can be altered without an auditable adjustment and approval.
+- unauthorized data/metadata may have been exposed;
+- authorization or row policy fails open;
+- user/data/export activity cannot be attributed where required;
+- export occurs without required audit;
+- logs/traces/audit/usage contain secrets, tokens, raw sensitive result data, or unauthorized content;
+- SQL safety can be bypassed;
+- visualization code escapes network/filesystem/process/resource boundaries;
+- reviewer/model loop exceeds approved limits;
+- golden/unseen/reconciliation threshold fails;
+- certified KPI has an unreconciled material difference;
+- cache crosses authorization scope or serves stale permission;
+- source routing reaches an unintended engine;
+- current documentation presents a target/configured-unused component as implemented;
+- fabricated demo data is presented as real;
+- usage events are materially missing, duplicated, unrecoverable, or unreconcilable;
+- estimated cost is presented as final chargeback;
+- rollback is unavailable or untested for the affected release.
