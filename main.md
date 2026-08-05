@@ -1,37 +1,26 @@
-Review the proposed Phase 0 remediation changes before commit and push.
+Proceed with the approved Phase 0 documentation and evidence commit.
 
 Repository:
 TD-Enterprise/kmai-td-genie
 
-PR:
+Pull request:
 #7
 
-Expected branch:
+Branch:
 asktd_v2
 
-Do not mark the PR Ready for Review.
-Do not merge.
-Do not modify repository settings.
-Do not resolve or accept the npm vulnerabilities.
-Do not create the CODEOWNERS bootstrap PR yet.
+Use the isolated authenticated worktree already validated against PR #7 head:
 
-Tasks:
+f97322de86a33dab4cf64140160374a37a62d516
 
-1. Confirm the current isolated worktree is based on the authenticated actual
-   PR #7 head.
+Instructions:
 
-2. Show:
+1. Include exactly the 10 reviewed files:
 
-   git status --short
-   git diff --name-status
-   git diff --stat
-   git diff --check
-
-3. Resolve the discrepancy between the UI statement "9 files changed" and the
-   final report list that appears to contain 10 files.
-
-4. Confirm that COPILOT_AGENT_EXECUTION_PROMPT.md is not modified.
-
-5. Review every proposed changed file and confirm:
-
-  
+- CODEOWNERS
+- kmai-td-genie/docs/plans/BRANCH_PROTECTION_REQUIRED_CHECKS.md
+- kmai-td-genie/docs/plans/GOLDEN_BASELINE_INVENTORY.md
+- kmai-td-genie/docs/plans/PHASE_0_APPROVAL_OWNER_MANUAL_ACTION_CHECKLIST.md
+- kmai-td-genie/docs/plans/PHASE_0_DEFINITION_OF_DONE.md
+- kmai-td-genie/docs/plans/PHASE_0_FINAL_APPROVAL_HANDOFF.md
+- kmai-td-genie/docs/plans/PHASE_0
