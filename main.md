@@ -1,26 +1,48 @@
-Proceed with the approved Phase 0 documentation and evidence commit.
+Approved. Push the existing validated commit to PR #7 branch.
 
-Repository:
-TD-Enterprise/kmai-td-genie
+Use the existing local commit:
 
-Pull request:
-#7
+4965b08ce21c29e0387757c4f2c29d4b8265cd97
 
-Branch:
-asktd_v2
+Push it to:
 
-Use the isolated authenticated worktree already validated against PR #7 head:
+origin/asktd_v2
 
-f97322de86a33dab4cf64140160374a37a62d516
+Requirements:
 
-Instructions:
+- Do not create a new commit.
+- Do not amend the existing commit.
+- Do not force push.
+- Do not modify any file.
+- Do not mark PR #7 Ready for Review.
+- Do not merge.
+- Do not change repository settings.
+- Do not create the CODEOWNERS bootstrap PR yet.
 
-1. Include exactly the 10 reviewed files:
+After push, verify from GitHub:
 
-- CODEOWNERS
-- kmai-td-genie/docs/plans/BRANCH_PROTECTION_REQUIRED_CHECKS.md
-- kmai-td-genie/docs/plans/GOLDEN_BASELINE_INVENTORY.md
-- kmai-td-genie/docs/plans/PHASE_0_APPROVAL_OWNER_MANUAL_ACTION_CHECKLIST.md
-- kmai-td-genie/docs/plans/PHASE_0_DEFINITION_OF_DONE.md
-- kmai-td-genie/docs/plans/PHASE_0_FINAL_APPROVAL_HANDOFF.md
-- kmai-td-genie/docs/plans/PHASE_0
+1. Push succeeded.
+2. PR #7 head SHA equals the pushed commit.
+3. PR #7 remains Draft.
+4. No unexpected files entered the PR.
+5. Report all checks triggered and their current statuses.
+6. Report whether the PR is behind the base branch.
+7. Report the exact changed-file count in PR #7.
+8. Report remaining blockers.
+
+Return only:
+
+# PR #7 Evidence Push Result
+
+- Commit SHA
+- Remote branch
+- PR head SHA
+- Push result
+- Draft status
+- Changed-file count
+- Checks triggered
+- Behind base
+- Unexpected files
+- Remaining blockers
+- Safe to mark Ready for Review: NO
+- Safe to merge: NO
