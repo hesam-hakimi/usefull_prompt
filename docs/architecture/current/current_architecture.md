@@ -1,101 +1,151 @@
-# askAlpha — Current Deployment Architecture
+# askAlpha — Current Deployment and Runtime Architecture
 
-**Status:** Current / implemented POC baseline
+**Status:** Current POC deployment/runtime view — repository-verified against `origin/asktd_v2` on 2026-08-04  
+**Evidence boundary:** The audit was read-only. The local private-repository worktree was on another branch with edits, so the agent audited `origin/asktd_v2`, which was three commits ahead of the local `asktd_v2` ref. Revalidate this view after material private-runtime changes.
 
-This view shows the deployment architecture currently evidenced by the repository deployment skill, deployment guide, and POC review. React build output is represented as static assets served from the same Azure App Service package as the FastAPI backend.
+This document contains only components and runtime behavior supported by private-repository code, configuration, packaging, and deployment evidence. Meeting observations are identified separately from code-confirmed facts. Target-state components must not be inferred from this view.
 
 ## Architecture diagram
 
 ```mermaid
 flowchart LR
-    user["Business Users"]
+    user["Business User<br/>Browser"]
 
-    subgraph azure["Azure / EDP Environment"]
+    subgraph asp["Azure App Service package"]
         direction LR
+        react["Packaged React build<br/>src/frontend/build<br/>Static HTML / CSS / JS"]
+        api["FastAPI / Uvicorn<br/>JSON REST + SSE"]
+        runtime["In-process application runtime<br/>Primary Orchestrator<br/>Fallback Orchestrator"]
+        validation["In-process validation<br/>Pydantic / auth / config / prompt mapping<br/>SQL safety after generation"]
+        diagnostics["JSON traces & diagnostics<br/>Redacted when enabled"]
 
-        subgraph hosting["Azure App Service (ASP)"]
-            direction TB
-            react["React SPA<br/>Static HTML / CSS / JS"]
-            api["FastAPI Backend<br/>REST API"]
-            safety["Pre-LLM Validation<br/>& Cost Guard"]
-            trace["Current JSON Trace<br/>& Diagnostics"]
-            react -->|"HTTPS REST API"| api
-            api -->|"Validate Before Model Call"| safety
-            api -.->|"Diagnostic Events"| trace
-        end
-
-        entra["Microsoft Entra ID"]
-        mi["Managed Identity"]
-        openai["Azure OpenAI"]
-        search["Azure AI Search<br/>Metadata Retrieval"]
-        sql["Azure SQL<br/>Application Data"]
-
-        api -->|"Uses"| mi
-        safety -->|"Approved Model Request"| openai
-        api -->|"Metadata Retrieval"| search
-        api -->|"Governed Read-Only SQL"| sql
-
-        mi -.->|"Authentication"| openai
-        mi -.->|"Authentication"| search
-        mi -.->|"Authentication"| sql
+        react -->|"Same-origin HTTPS<br/>REST or SSE + Bearer JWT"| api
+        api --> runtime
+        api -.-> validation
+        api -.-> diagnostics
     end
 
-    user -->|"HTTPS"| react
-    react -.->|"Sign-in"| entra
-    entra -.->|"JWT / Group Claims"| api
+    entra["Microsoft Entra ID / JWKS"]
+    mi["User-assigned Managed Identity"]
+    sql["Azure SQL<br/>Analytics + authz/control + diagnostics"]
+    search["Azure AI Search<br/>Conditional fallback metadata text search"]
+    openai["Azure OpenAI<br/>Direct SDK / AutoGen model calls"]
 
-    classDef user fill:#e7f6eb,stroke:#008a00,stroke-width:1.5px,color:#1a1a1a;
+    user -->|"HTTPS GET / and /assets/*"| react
+    user -.->|"MSAL login / token acquisition"| entra
+    api -.->|"JWKS + issuer/audience/scope validation"| entra
+
+    api -->|"Uses"| mi
+    mi -->|"ODBC ActiveDirectoryMsi"| sql
+    mi -->|"MSI credential"| search
+    mi -->|"MSI token"| openai
+
+    runtime -->|"Primary and generated SQL"| sql
+    runtime -.->|"Fallback grounding only"| search
+    runtime -->|"Direct model calls"| openai
+
+    classDef actor fill:#e7f6eb,stroke:#008a00,stroke-width:1.5px,color:#1a1a1a;
     classDef app fill:#eef7ee,stroke:#008a00,stroke-width:1.5px,color:#1a1a1a;
-    classDef control fill:#f3f7e8,stroke:#708b1e,stroke-width:1.5px,color:#1a1a1a;
-    classDef azure fill:#e7f0f9,stroke:#205e91,stroke-width:1.5px,color:#1a1a1a;
+    classDef internal fill:#f7f7f7,stroke:#777777,stroke-width:1.2px,color:#1a1a1a;
+    classDef identity fill:#e7f0f9,stroke:#205e91,stroke-width:1.5px,color:#1a1a1a;
     classDef data fill:#fff6e0,stroke:#b77800,stroke-width:1.5px,color:#1a1a1a;
-    classDef telemetry fill:#f3eafa,stroke:#6f42a5,stroke-width:1.5px,color:#1a1a1a;
+    classDef ai fill:#eef3ff,stroke:#205e91,stroke-width:1.5px,color:#1a1a1a;
 
-    class user user;
+    class user actor;
     class react,api app;
-    class safety control;
-    class entra,mi,openai,search azure;
+    class runtime,validation,diagnostics internal;
+    class entra,mi identity;
     class sql data;
-    class trace telemetry;
+    class search,openai ai;
 
-    style azure fill:#ffffff,stroke:#64a878,stroke-width:2px,stroke-dasharray:6 4
-    style hosting fill:#ffffff,stroke:#9ab7a7,stroke-width:1.5px,stroke-dasharray:5 4
+    style asp fill:#ffffff,stroke:#64a878,stroke-width:2px,stroke-dasharray:6 4
 ```
 
-## Current capabilities confirmed by the POC review
+## Confirmed current component status
 
-- Application-level validation occurs before the model/gateway request so invalid or harmful content can be rejected before incurring model cost.
-- Current explainability is primarily machine-readable JSON/diagnostic output showing major decisions, semantic/model queries, selected tables, metadata, and suggested plots.
-- The runtime includes a reviewer feedback loop that can return an incomplete answer for another bounded planning/generation attempt.
-- Visualization code can run in a sandbox and produce plot artifacts for the response-writing flow.
-- Metadata is currently assembled from sources including EDC, data models, Bitbucket assets, and historical queries.
+| Component | Verified status | Current role |
+|---|---|---|
+| React production build | Current | Vite produces production assets under `src/frontend/build`. CI runs install, tests, and build from the frontend project. |
+| React static serving | Current | FastAPI resolves the frontend build directory, mounts static assets at `/`, and supports SPA fallback and asset-cache headers. |
+| App Service package | Current | React build output is included in the Python artifact. `startup.sh` starts one Uvicorn/FastAPI application; React is not a separate deployed service. |
+| Browser/API communication | Current | Same-origin HTTPS relative calls. JSON endpoints include `/api/config`, `/api/auth/profile`, `/api/chat`, roles/questions/registry APIs; streaming uses `POST /api/chat/stream` with `text/event-stream`, with JSON fallback. |
+| Microsoft Entra/MSAL | Current | MSAL runs in the browser, initializes from `/api/config`, uses redirect/silent token acquisition, and stores tokens in session storage. |
+| JWT validation | Current | The browser sends `Authorization: Bearer`. FastAPI validates Entra JWTs using PyJWT/JWKS, issuer, audience, scope, group-overage behavior, and a stable user identifier. |
+| Live orchestrators | Current | `/api/chat` invokes `handle_chat()`, which builds the primary `Orchestrator` and `FallbackOrchestrator`. |
+| Runtime agents | Current, route-dependent | Wired agents include intent routing, registry routing, requirement clarification, report planning, SQL generation, error triage, visualization coding, report/executive writing, and executive review. The fallback path also uses metadata retrieval, SQL safety, and DB execution agents. |
+| Azure OpenAI | Current | Model calls go directly through Azure OpenAI SDK/AutoGen configuration to `AZURE_OPENAI_ENDPOINT`. No enterprise LLM Gateway is present in the live code path. |
+| Azure SQL | Current | Primary analytics/query execution, SQL-backed available-data stores, authorization/access-management control data, access-change history, SQL diagnostics, and optional client-auth diagnostics. |
+| Azure AI Search | Current, conditional fallback | Simple text search over field/table/relationship metadata indexes for fallback/generated-SQL grounding. It is not the primary deterministic path and is not currently vector/hybrid retrieval. |
+| Managed Identity | Current | User-assigned Managed Identity is configured. Azure SQL uses `ActiveDirectoryMsi`; Azure OpenAI/Search use managed identity unless approved environment overrides select another supported credential path. |
+| JSON traces/diagnostics | Current | Authorized debug responses may include traces, debug panels, executed queries, and redacted SQL. Diagnostic routes expose runtime/SQL information and redacted log tails. These are not a durable user-query audit service. |
+| Redis/cache | Configured but unused | Redis host/config mappings exist, but no Redis client/runtime dependency is wired. Current caches are in-process DataFrame/LRU caches. |
+| User-query audit | Absent | No durable, explicit user-question audit sink was found. Debug traces/logs do not satisfy this requirement. |
+| Data-access audit | Partially implemented | Authorization allow/deny decisions are logged, and access-management mutations have a SQL change log. No complete durable data-read audit/event stream exists. |
+| Export audit | Absent | Report download/print behavior is client-side; no backend export route or export audit sink was found. |
+| LangSmith | Absent | No source, configuration, or dependency evidence. |
+| Azure Sentinel | Absent | No current integration. An internal variable containing the word `SENTINEL` is not Azure Sentinel integration. |
+| Dynatrace | Absent | No source, configuration, or dependency evidence. |
+| Datadog | Configured but unused | A generic workflow update option exists, but no application-runtime monitoring integration is wired. |
+| Event Hubs | Planned | Appears only in target architecture/documentation, not the live runtime. |
+| Databricks | Planned | Appears only in MVP/target design, not current source/config/dependencies. |
+| ADLS | Planned | Appears only in MVP/target design, not current source/config/dependencies. |
+| Usage collector | Planned | Not a current runtime component. |
+| Durable outbox | Planned | Not a current runtime component. |
 
-The reviewer and visualization details are logical runtime behaviors and are intentionally not expanded into separate hosting services in this deployment view.
+## Exact current runtime sequence
 
-## Known current gaps
+1. CI/CD installs frontend dependencies, runs frontend coverage tests, and builds React.
+2. Vite writes production assets to `src/frontend/build`.
+3. `MANIFEST.in` includes the React build in the Python artifact; React and FastAPI deploy in one App Service package.
+4. App Service runs `startup.sh`, which starts Uvicorn on `SERVER_PORT` or `PORT`.
+5. FastAPI registers health/API routes, security/CORS headers, and static SPA serving at `/`.
+6. The browser loads `/` and `/assets/*` from the same App Service/FastAPI process.
+7. The SPA calls `/api/config` and initializes MSAL when enterprise authentication is enabled.
+8. MSAL performs Entra redirect/silent token acquisition for the configured scope.
+9. Protected same-origin API calls include the bearer token. Chat supports JSON and SSE.
+10. FastAPI performs Pydantic request validation and authentication dependencies before invoking the chat handler.
+11. JWT validation resolves Entra JWKS, checks issuer/audience/scope, handles group overage, and creates the trusted user context.
+12. When enabled, effective permissions are resolved from SQL-backed access management.
+13. `handle_chat()` constructs Azure AI Search, Azure OpenAI, Azure SQL, policy, agent-manager, primary-orchestrator, and fallback-orchestrator dependencies.
+14. The primary orchestrator first handles greetings, deny-all authorization, deterministic source plans/recipes, and SQL-backed available-data paths.
+15. When fallback/generated SQL is needed, route-dependent agents retrieve metadata from Azure AI Search, generate or repair SQL, validate it with in-process policy/authorization controls, execute against Azure SQL, and format the answer.
+16. Model calls go directly to Azure OpenAI; no live enterprise LLM Gateway precedes them.
+17. Responses are serialized to JSON-safe payloads. Authorized debug mode can include redacted diagnostic details.
+18. The streaming route emits phase events and the final response through SSE.
 
-- There is no complete built-in user/data/export audit proving who asked what, what governed data was accessed, and what was exported.
-- There is no live result cache; repeated questions fetch fresh data from SQL Server.
-- Answer quality and generated SQL are still reviewed manually in the POC, and hallucinations have been observed.
-- Current evaluation is constrained by access to approximately four tables and must not be represented as enterprise-scale proof.
-- Human-readable graphical agent explainability is planned, not current.
-- Enterprise monitoring/SIEM integration, Event Hubs, chargeback, Databricks, ADLS, and production cache services are not shown as implemented.
+## Important validation-boundary clarification
 
-See `docs/plans/SAFETY_OBSERVABILITY_AUDIT_AND_QUALITY_ADDENDUM.md` for required remediation and release gates.
+There is **no standalone pre-LLM validation microservice** in the current runtime. Current controls are in-process:
 
-## Assumptions and evidence boundary
+- Pydantic/request validation;
+- JWT/authentication and authorization checks;
+- configuration validation;
+- prompt-data preparation/safety logic;
+- SQL safety and authorization validation after model-generated SQL and before database execution.
 
-- Azure App Service usage is supported by the packaged-config deployment skill, startup script handling, private-endpoint guidance, and the EDP snapshot workflow.
-- React is shown in the same App Service because its build produces static HTML/CSS/JavaScript assets packaged with the application.
-- Azure SQL, Azure AI Search, Azure OpenAI, Microsoft Entra ID, and Managed Identity are treated as current based on the established Phase 0 and POC context.
-- The application-level safety filter complements, and does not replace, approved enterprise LLM Gateway filtering.
-- The exact enterprise gateway placement should be confirmed from the private deployment configuration before it is represented as a separate infrastructure component.
+A future product requirement may formalize and strengthen pre-model safety and cost controls, but it must not be represented as a separately deployed current service without code/deployment evidence.
 
-## Communication summary
+## Do not show as current
 
-- Browser access uses HTTPS.
-- React communicates with FastAPI through an HTTPS REST API.
-- Microsoft Entra ID provides user authentication.
-- The backend validates the token and authorization context.
-- Requests are validated before model calls.
-- Azure service access uses Managed Identity or another explicitly approved workload identity.
+- Enterprise LLM Gateway in front of Azure OpenAI.
+- Separate React hosting, CDN, Static Web App, or second App Service.
+- React as a server-side runtime; React is packaged static build output served by FastAPI.
+- Entra sending claims directly to FastAPI; the browser obtains the token and sends the bearer token, while FastAPI validates with Entra JWKS.
+- Redis as a live runtime cache.
+- Databricks SQL Warehouse or ADLS as current analytical/data services.
+- Event Hubs, usage collector, or durable outbox as current telemetry components.
+- LangSmith, Azure Sentinel, Dynatrace, or Datadog runtime integration.
+- Complete user-query, data-read, or export auditing.
+- Vector/hybrid Azure AI Search retrieval.
+- A standalone validation service.
+
+## Current POC limitations observed in the review meeting
+
+These are meeting-derived limitations and remain subject to repository/environment verification where applicable:
+
+- The demonstrated POC covered approximately four tables.
+- Quality checking was largely manual, and hallucinations were acknowledged.
+- Identical questions are not served from a distributed result cache.
+- Current JSON diagnostics are not the same as explainability visualization or a compliance-grade audit trail.
+
+These limitations do not automatically reopen technically completed Phase 0. They become explicit Beta/production requirements unless a current security or correctness defect is confirmed.
