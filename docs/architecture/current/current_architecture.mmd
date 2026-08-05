@@ -1,53 +1,51 @@
 flowchart LR
-    user["Business Users"]
+    user["Business User<br/>Browser"]
 
-    subgraph azure["Azure / EDP Environment"]
+    subgraph asp["Azure App Service package"]
         direction LR
+        react["Packaged React build<br/>src/frontend/build<br/>Static HTML / CSS / JS"]
+        api["FastAPI / Uvicorn<br/>JSON REST + SSE"]
+        runtime["In-process application runtime<br/>Primary Orchestrator<br/>Fallback Orchestrator"]
+        validation["In-process validation<br/>Pydantic / auth / config / prompt mapping<br/>SQL safety after generation"]
+        diagnostics["JSON traces & diagnostics<br/>Redacted when enabled"]
 
-        subgraph hosting["Azure App Service (ASP)"]
-            direction TB
-            react["React SPA<br/>Static HTML / CSS / JS"]
-            api["FastAPI Backend<br/>REST API"]
-            safety["Pre-LLM Validation<br/>& Cost Guard"]
-            trace["Current JSON Trace<br/>& Diagnostics"]
-            react -->|"HTTPS REST API"| api
-            api -->|"Validate Before Model Call"| safety
-            api -.->|"Diagnostic Events"| trace
-        end
-
-        entra["Microsoft Entra ID"]
-        mi["Managed Identity"]
-        openai["Azure OpenAI"]
-        search["Azure AI Search<br/>Metadata Retrieval"]
-        sql["Azure SQL<br/>Application Data"]
-
-        api -->|"Uses"| mi
-        safety -->|"Approved Model Request"| openai
-        api -->|"Metadata Retrieval"| search
-        api -->|"Governed Read-Only SQL"| sql
-
-        mi -.->|"Authentication"| openai
-        mi -.->|"Authentication"| search
-        mi -.->|"Authentication"| sql
+        react -->|"Same-origin HTTPS<br/>REST or SSE + Bearer JWT"| api
+        api --> runtime
+        api -.-> validation
+        api -.-> diagnostics
     end
 
-    user -->|"HTTPS"| react
-    react -.->|"Sign-in"| entra
-    entra -.->|"JWT / Group Claims"| api
+    entra["Microsoft Entra ID / JWKS"]
+    mi["User-assigned Managed Identity"]
+    sql["Azure SQL<br/>Analytics + authz/control + diagnostics"]
+    search["Azure AI Search<br/>Conditional fallback metadata text search"]
+    openai["Azure OpenAI<br/>Direct SDK / AutoGen model calls"]
 
-    classDef user fill:#e7f6eb,stroke:#008a00,stroke-width:1.5px,color:#1a1a1a;
+    user -->|"HTTPS GET / and /assets/*"| react
+    user -.->|"MSAL login / token acquisition"| entra
+    api -.->|"JWKS + issuer/audience/scope validation"| entra
+
+    api -->|"Uses"| mi
+    mi -->|"ODBC ActiveDirectoryMsi"| sql
+    mi -->|"MSI credential"| search
+    mi -->|"MSI token"| openai
+
+    runtime -->|"Primary and generated SQL"| sql
+    runtime -.->|"Fallback grounding only"| search
+    runtime -->|"Direct model calls"| openai
+
+    classDef actor fill:#e7f6eb,stroke:#008a00,stroke-width:1.5px,color:#1a1a1a;
     classDef app fill:#eef7ee,stroke:#008a00,stroke-width:1.5px,color:#1a1a1a;
-    classDef control fill:#f3f7e8,stroke:#708b1e,stroke-width:1.5px,color:#1a1a1a;
-    classDef azure fill:#e7f0f9,stroke:#205e91,stroke-width:1.5px,color:#1a1a1a;
+    classDef internal fill:#f7f7f7,stroke:#777777,stroke-width:1.2px,color:#1a1a1a;
+    classDef identity fill:#e7f0f9,stroke:#205e91,stroke-width:1.5px,color:#1a1a1a;
     classDef data fill:#fff6e0,stroke:#b77800,stroke-width:1.5px,color:#1a1a1a;
-    classDef telemetry fill:#f3eafa,stroke:#6f42a5,stroke-width:1.5px,color:#1a1a1a;
+    classDef ai fill:#eef3ff,stroke:#205e91,stroke-width:1.5px,color:#1a1a1a;
 
-    class user user;
+    class user actor;
     class react,api app;
-    class safety control;
-    class entra,mi,openai,search azure;
+    class runtime,validation,diagnostics internal;
+    class entra,mi identity;
     class sql data;
-    class trace telemetry;
+    class search,openai ai;
 
-    style azure fill:#ffffff,stroke:#64a878,stroke-width:2px,stroke-dasharray:6 4
-    style hosting fill:#ffffff,stroke:#9ab7a7,stroke-width:1.5px,stroke-dasharray:5 4
+    style asp fill:#ffffff,stroke:#64a878,stroke-width:2px,stroke-dasharray:6 4
