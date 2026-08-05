@@ -1,48 +1,50 @@
-Approved. Push the existing validated commit to PR #7 branch.
+Monitor PR #7 checks for the current head commit.
 
-Use the existing local commit:
+Repository:
+TD-Enterprise/kmai-td-genie
 
-4965b08ce21c29e0387757c4f2c29d4b8265cd97
+PR:
+#7
 
-Push it to:
+Do not modify files, commit, push, merge, change settings, or mark the PR
+Ready for Review.
 
-origin/asktd_v2
+Wait until all checks registered for the current PR head reach a terminal
+state.
 
-Requirements:
+Then report:
 
-- Do not create a new commit.
-- Do not amend the existing commit.
-- Do not force push.
-- Do not modify any file.
-- Do not mark PR #7 Ready for Review.
-- Do not merge.
-- Do not change repository settings.
-- Do not create the CODEOWNERS bootstrap PR yet.
+1. Current PR head SHA.
+2. Every exact displayed check name.
+3. Workflow and job corresponding to each check.
+4. GitHub App/source.
+5. Final status:
+   - SUCCESS
+   - FAILURE
+   - CANCELLED
+   - SKIPPED
+   - TIMED OUT
+6. Whether each check ran on the current head SHA.
+7. Failed job step and error summary for any failure.
+8. Checks that were expected but never registered.
+9. Whether downstream open-pr-cycle and Terraform jobs appeared.
+10. Whether the PR remains behind main.
+11. Whether the PR remains Draft and BLOCKED.
 
-After push, verify from GitHub:
+Return:
 
-1. Push succeeded.
-2. PR #7 head SHA equals the pushed commit.
-3. PR #7 remains Draft.
-4. No unexpected files entered the PR.
-5. Report all checks triggered and their current statuses.
-6. Report whether the PR is behind the base branch.
-7. Report the exact changed-file count in PR #7.
-8. Report remaining blockers.
+# PR #7 Current Head Check Report
 
-Return only:
+## PR head SHA
+## Exact checks
+## Successful checks
+## Failed checks
+## Skipped/cancelled checks
+## Missing expected checks
+## Behind-base status
+## Remaining blockers
 
-# PR #7 Evidence Push Result
+End with:
 
-- Commit SHA
-- Remote branch
-- PR head SHA
-- Push result
-- Draft status
-- Changed-file count
-- Checks triggered
-- Behind base
-- Unexpected files
-- Remaining blockers
-- Safe to mark Ready for Review: NO
-- Safe to merge: NO
+Safe to mark Ready for Review: NO
+Safe to merge: NO
