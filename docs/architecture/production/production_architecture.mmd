@@ -1,107 +1,97 @@
-flowchart TB
-    user["Business Users"]
+flowchart LR
+    user["Business User<br/>Browser"]
 
-    subgraph azure["Target Enterprise Azure Architecture"]
-        direction TB
+    subgraph azure["Target enterprise Azure architecture — approval-dependent"]
+        direction LR
 
-        gateway["Azure Application Gateway<br/>WAF"]
+        gateway["Azure Application Gateway<br/>WAF / controlled ingress"]
 
-        subgraph hosting["Azure App Service — One Approved Application Boundary"]
-            direction LR
-            react["React SPA"]
-            api["FastAPI Backend"]
-            safety["Pre-LLM Safety<br/>& Cost Guard"]
-            policy["Authorization<br/>& Policy"]
-            planner["Semantic Planning"]
-            answer["Answer Assembly"]
-            reviewer["Answer Quality<br/>Reviewer"]
-            sandbox["Hardened Visualization<br/>Sandbox"]
+        subgraph app["Azure App Service application boundary"]
+            direction TB
+            react["Packaged React build<br/>Static assets"]
+            api["FastAPI / Uvicorn<br/>JSON REST + SSE"]
+            authz["Authorization & policy"]
+            planner["Semantic planning"]
+            reviewer["Bounded answer-quality reviewer"]
+            sandbox["Hardened visualization sandbox"]
 
-            react -->|"HTTPS REST API"| api
-            api --> safety --> policy --> planner --> answer --> reviewer
-            reviewer -.->|"Bounded Feedback"| planner
-            planner -->|"Visualization Task"| sandbox
-            sandbox -->|"Sanitized Artifact"| answer
+            subgraph streams["Distinct correlated record streams"]
+                usage["Model usage collector"]
+                accessAudit["User / data / export audit"]
+                agentTrace["Agent / LLM decision trace"]
+            end
 
-            meter["Model Usage<br/>Collector"]
-            audit["User / Data / Export<br/>Audit"]
-            trace["Agent / LLM<br/>Decision Trace"]
-            outbox["Durable Outbox"]
+            outbox["Durable outbox"]
 
-            planner --> meter --> outbox
-            api --> audit --> outbox
-            planner --> trace --> outbox
-            reviewer --> trace
-            sandbox --> trace
+            react -->|"Same-origin HTTPS<br/>REST or SSE + Bearer JWT"| api
+            api --> authz --> planner
+            planner --> reviewer
+            reviewer -.->|"Bounded feedback"| planner
+            planner -.-> sandbox
+            api -.-> usage
+            api -.-> accessAudit
+            planner -.-> agentTrace
+            usage --> outbox
+            accessAudit --> outbox
+            agentTrace --> outbox
         end
 
-        subgraph platform["Azure Services and Governed Data Platform"]
-            direction LR
-            entra["Microsoft Entra ID"]
-            mi["Managed Identity"]
-            openai["Azure OpenAI"]
-            search["Azure AI Search"]
-            cache["Approved Scope-Aware Cache<br/>Redis-Compatible"]
-            sql["Azure SQL<br/>Control Plane / Outbox"]
-            dbsql["Azure Databricks<br/>SQL Warehouse"]
-            dbproc["Azure Databricks<br/>Event Processing"]
-            adls["ADLS Gen2<br/>Delta / Audit / Artifacts"]
-        end
-
-        subgraph operations["Telemetry, Audit and Operations"]
-            direction LR
-            events["Azure Event Hubs"]
-            monitor["Approved Enterprise<br/>Monitoring / SIEM"]
-            reporting["Usage Showback<br/>and Operational Reporting"]
-        end
+        entra["Microsoft Entra ID / JWKS"]
+        mi["Managed Identity / approved workload identity"]
+        openai["Azure OpenAI<br/>Approved model access"]
+        search["Azure AI Search<br/>Bounded candidate retrieval"]
+        cache["Approved cache provider<br/>Authorization-scope-aware"]
+        sql["Azure SQL<br/>Control plane"]
+        dbsql["Azure Databricks SQL Warehouse<br/>Governed analytical execution"]
+        eventproc["Databricks event processing"]
+        adls["ADLS Gen2<br/>Governed data + audit/usage history"]
+        events["Azure Event Hubs<br/>Asynchronous event transport"]
+        operations["Approved enterprise monitoring / SIEM"]
+        reporting["Showback + reconciliation<br/>Chargeback only after approval"]
 
         gateway --> react
-        react -.->|"Sign-in"| entra
-        entra -.->|"JWT / Application Group Claims"| api
-
         api -->|"Uses"| mi
-        mi -.->|"Authentication"| openai
-        mi -.->|"Authentication"| search
-        mi -.->|"Authentication"| sql
-        mi -.->|"Approved Workload Identity"| dbsql
-        mi -.->|"Authentication"| dbproc
-        mi -.->|"Authentication"| cache
-        mi -.->|"Authentication"| events
+        mi --> openai
+        mi --> search
+        mi --> cache
+        mi --> sql
+        mi --> dbsql
+        mi --> events
 
-        planner -->|"Metadata / Policies"| sql
-        planner -->|"Candidate Retrieval"| search
-        planner -->|"Model Calls"| openai
-        planner -->|"Governed Analytical SQL"| dbsql
-        openai -->|"Model Result"| answer
-        dbsql -->|"Authorized Query Result"| answer
-        dbsql -->|"Governed Data Products"| adls
-        api -->|"Authorization-Scope-Aware Cache"| cache
+        planner -->|"Metadata / KPI / policy"| sql
+        planner -->|"Authorized candidate retrieval"| search
+        planner -->|"Model calls"| openai
+        planner -->|"Governed analytical SQL"| dbsql
+        dbsql -->|"Governed data products"| adls
+        api -->|"Authorized-result cache only"| cache
 
-        outbox -->|"Durable State"| sql
-        outbox -.->|"Usage / Audit / Trace Events"| events
-        events -.->|"Streaming Processing"| dbproc
-        dbproc -.->|"Curated Event History"| adls
-        events -.->|"Operational / Security Events"| monitor
-        adls -.->|"Reconciled Usage and Audit Data"| reporting
+        outbox -.->|"Usage / audit / trace events"| events
+        events -.-> eventproc
+        eventproc -.->|"Curated append-only history"| adls
+        adls -.-> operations
+        adls -.-> reporting
     end
 
     user -->|"HTTPS"| gateway
+    user -.->|"MSAL login / token acquisition"| entra
+    api -.->|"JWKS + issuer/audience/scope validation"| entra
 
-    classDef user fill:#e7f6eb,stroke:#008a00,stroke-width:1.5px,color:#1a1a1a;
+    classDef actor fill:#e7f6eb,stroke:#008a00,stroke-width:1.5px,color:#1a1a1a;
     classDef app fill:#eef7ee,stroke:#008a00,stroke-width:1.5px,color:#1a1a1a;
-    classDef control fill:#f3f7e8,stroke:#708b1e,stroke-width:1.5px,color:#1a1a1a;
-    classDef azure fill:#e7f0f9,stroke:#205e91,stroke-width:1.5px,color:#1a1a1a;
+    classDef control fill:#f7f7f7,stroke:#777777,stroke-width:1.2px,color:#1a1a1a;
+    classDef identity fill:#e7f0f9,stroke:#205e91,stroke-width:1.5px,color:#1a1a1a;
     classDef data fill:#fff6e0,stroke:#b77800,stroke-width:1.5px,color:#1a1a1a;
     classDef telemetry fill:#f3eafa,stroke:#6f42a5,stroke-width:1.5px,color:#1a1a1a;
+    classDef ai fill:#eef3ff,stroke:#205e91,stroke-width:1.5px,color:#1a1a1a;
 
-    class user user;
-    class react,api,planner,answer,reviewer,sandbox app;
-    class safety,policy control;
-    class gateway,entra,mi,openai,search,cache azure;
-    class sql,dbsql,dbproc,adls data;
-    class meter,audit,trace,outbox,events,monitor,reporting telemetry;
+    class user actor;
+    class react,api app;
+    class authz,planner,reviewer,sandbox,outbox control;
+    class entra,mi,gateway identity;
+    class sql,dbsql,eventproc,adls data;
+    class usage,accessAudit,agentTrace,events,operations,reporting telemetry;
+    class openai,search,cache ai;
 
     style azure fill:#ffffff,stroke:#64a878,stroke-width:2px,stroke-dasharray:6 4
-    style hosting fill:#ffffff,stroke:#9ab7a7,stroke-width:1.5px,stroke-dasharray:5 4
-    style platform fill:#ffffff,stroke:#8eaac0,stroke-width:1.5px,stroke-dasharray:5 4
-    style operations fill:#ffffff,stroke:#9c78bd,stroke-width:1.5px,stroke-dasharray:5 4
+    style app fill:#ffffff,stroke:#9ab7a7,stroke-width:1.5px,stroke-dasharray:5 4
+    style streams fill:#ffffff,stroke:#6f42a5,stroke-width:1.1px,stroke-dasharray:3 3
