@@ -1,68 +1,67 @@
-Select option 2: Deploy to shared dev with capture + restore.
+Proceed with option 1: run the complete Phase 1 local smoke and integration validation.
 
-Before deployment:
+Use the isolated Phase 1 worktree and do not deploy to Azure.
 
-1. Capture and record the currently deployed Phase 0:
-   - branch
-   - commit SHA
-   - deployment run ID
-   - artifact/version
-   - packaged config.yaml
-   - relevant App Service settings
-   - feature flags
-   - rollback command and workflow
+Set:
 
-2. Confirm that the Phase 1 deployment will not:
-   - run a destructive or irreversible database migration;
-   - overwrite Phase 0 evidence;
-   - change shared authorization mappings permanently;
-   - modify repository settings;
-   - promote anything to Beta or Production.
+PHASE1_PLATFORM_READINESS_ENABLED=true
 
-3. Label the deployment:
+for the local test process only.
 
-   Experimental Phase 1 Development Deployment
-   Not Phase 0 closure evidence
-   Not approved for Beta or Production
+Requirements:
 
-4. Deploy the current Phase 1 branch and exact commit to the shared
-   Development App Service.
+1. Start the application locally using the repository-supported startup method.
+2. Use only safe local/mock authentication supported by the Development configuration.
+3. Do not alter Azure App Service settings, packaged shared-environment config, databases, or cloud resources.
+4. Run and record:
 
-5. Run Phase 1 smoke and integration validation:
-   - application health
-   - React SPA
-   - /api/config
-   - Entra/MSAL login
-   - bearer-token validation
-   - protected routes
-   - authorization
-   - REST /api/chat
-   - SSE /api/chat/stream
-   - Azure SQL
-   - Azure OpenAI
-   - Azure AI Search fallback where applicable
-   - new Phase 1 readiness functionality
-   - diagnostics redaction
+- application health
+- React SPA load
+- static assets
+- GET /api/config
+- GET /api/platform/readiness
+- readiness endpoint disabled behavior when the flag is false
+- readiness endpoint enabled behavior when the flag is true
+- anonymous protected-route rejection
+- authenticated local/mock access
+- role and authorization checks
+- POST /api/chat
+- POST /api/chat/stream using SSE
+- deterministic route
+- fallback route where safely testable
+- diagnostics redaction
+- invalid configuration handling
+- feature-flag rollback to false
 
-6. Capture all results with the deployed branch and SHA.
+5. Verify the new endpoint:
 
-7. Restore the exact previous Phase 0 artifact and configuration.
+- is disabled by default;
+- returns 404 when disabled;
+- requires appropriate authentication/authorization when enabled;
+- exposes no secrets, tokens, private URLs, connection strings, or sensitive configuration;
+- accurately distinguishes implemented, configured-but-unused, planned, approval-pending, blocked, and unavailable capabilities;
+- does not perform Azure resource provisioning or mutate configuration.
 
-8. After restoration, run Phase 0 smoke validation:
-   - application health
-   - React SPA
-   - authentication
-   - authorization
-   - REST
-   - SSE
-   - deterministic route
-   - offline golden baseline
-   - confirm the deployed SHA is again the original Phase 0 SHA
+6. Run focused tests and the relevant full regression suite.
 
-9. Stop and report BLOCKED before deployment if:
-   - the current Phase 0 artifact cannot be identified;
-   - rollback cannot be proven;
-   - persistent database/config changes are required;
-   - the shared environment cannot be restored safely.
+7. Stop the local process after testing and confirm no persistent environment changes remain.
 
-Do not merge, mark Ready for Review, or deploy to Beta/Production.
+8. Do not commit additional changes merely to make the smoke test pass without first reporting the defect.
+
+Return:
+
+# Phase 1 Local Smoke Validation
+
+## Branch and commit SHA
+## Local startup command
+## Environment and feature flags
+## Endpoint results
+## Authentication and authorization results
+## REST and SSE results
+## Readiness contract validation
+## Security/redaction validation
+## Regression tests
+## Defects found
+## Persistent changes remaining
+## Safe to continue Phase 1 development: YES/NO
+## Safe to deploy once an isolated target exists: YES/NO
