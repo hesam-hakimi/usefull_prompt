@@ -1,177 +1,68 @@
-You are a Chief Enterprise Architect designing the final production architecture for askAlpha.
+# Prompt 3 — Target Enterprise Production Architecture
 
-Generate a presentation-quality Mermaid flowchart.
+You are a Chief Enterprise Architect.
 
-Return ONLY Mermaid.
+Generate or update the **TARGET / FUTURE-STATE** askAlpha architecture. The output must clearly separate approval-dependent target services from the verified current baseline.
 
-This architecture will be presented to senior leadership.
+## Preserve the application boundary
 
-The architecture should follow Microsoft Azure reference architecture principles.
+- React remains packaged static output unless an approved future hosting ADR changes it.
+- FastAPI/Uvicorn remains the backend/API boundary.
+- Browser/API communication supports JSON REST and SSE.
+- Browser/MSAL obtains the Entra token; browser sends bearer JWT; FastAPI validates with Entra JWKS.
+- Keep the first production release within one approved application security boundary where practical.
 
-Use clear enterprise layering.
+## Target layers
 
-Architecture
+### Controlled ingress
 
-Users
+- Azure Application Gateway/WAF, only as approval-dependent target ingress.
 
-↓
+### Application layer
 
-Azure Application Gateway (WAF)
+- React static assets;
+- FastAPI API;
+- fine-grained authorization and policy;
+- semantic planning;
+- bounded answer-quality reviewer;
+- hardened visualization sandbox.
 
-↓
+### AI and control plane
 
-Azure App Service
+- Azure OpenAI through approved model access;
+- Azure AI Search for bounded authorized candidate retrieval;
+- Azure SQL control plane for metadata, KPI, entitlement, workflow, audit indexes, and durable outbox state;
+- approved authorization-scope-aware cache.
 
-↓
+### Data plane
 
-React Frontend
+- Azure Databricks SQL Warehouse;
+- ADLS Gen2 governed data products and curated history;
+- Unity Catalog technical metadata/security integration.
 
-↓
+### Distinct correlated record streams
 
-HTTPS REST API
+1. user/data/export audit;
+2. agent/LLM decision trace;
+3. model usage metering.
 
-↓
+Each stream feeds a durable outbox, then Azure Event Hubs, Databricks event processing, ADLS history, and approved monitoring/showback/reconciliation.
 
-FastAPI Backend
+## Required clarifications
 
-↓
+- Event Hubs is asynchronous event transport, not the analytical query engine.
+- Showback precedes chargeback.
+- Formal chargeback is approval-dependent.
+- Do not show an enterprise LLM Gateway unless separately approved and implemented.
+- Do not show Redis, Event Hubs, Databricks, ADLS, monitoring, or audit pipeline as current.
+- Keep reviewer loops bounded by attempts, time, tokens, cost, and safe-stop policy.
+- Cache only authorized results keyed by effective scope and policy/data versions.
 
-Business Orchestrator
+## Files
 
-↓
+Update both:
 
-Runtime Model Policy
+- `docs/architecture/production/production_architecture.mmd`
+- `docs/architecture/production/production_architecture.md`
 
-↓
-
-Semantic Planner
-
-↓
-
-Governed SQL Generator
-
-↓
-
-Authorization Engine
-
-Azure Cloud Services
-
-• Microsoft Entra ID
-• Managed Identity
-• Azure OpenAI
-• Azure SQL (Control Plane)
-• Azure Databricks SQL Warehouse
-• Azure Data Lake Storage Gen2
-• Azure AI Search
-• Azure Cache for Redis
-• Azure Event Hubs
-
-Operational Flow
-
-Business Question
-
-↓
-
-Authentication
-
-↓
-
-Authorization
-
-↓
-
-Semantic Planning
-
-↓
-
-Metadata Retrieval
-
-↓
-
-SQL Generation
-
-↓
-
-SQL Validation
-
-↓
-
-Databricks SQL
-
-↓
-
-Business Answer
-
-Telemetry Flow
-
-Application
-
-↓
-
-Usage Collector
-
-↓
-
-Durable Outbox
-
-↓
-
-Azure Event Hubs
-
-↓
-
-Databricks
-
-↓
-
-ADLS
-
-↓
-
-Showback / Chargeback
-
-Clearly distinguish
-
-Presentation Layer
-
-Application Layer
-
-AI Layer
-
-Control Plane
-
-Data Plane
-
-Telemetry Layer
-
-Azure Cloud
-
-Show
-
-REST API
-
-Managed Identity
-
-HTTPS
-
-SQL
-
-Event Stream
-
-Cache
-
-Do NOT include implementation classes or source code.
-
-The diagram should look like a Microsoft enterprise architecture diagram.
-
-Use left-to-right layout.
-
-Add a legend explaining
-
-Solid Arrow = Request
-
-Dashed Arrow = Authentication
-
-Dotted Arrow = Telemetry
-
-Return Mermaid only.
+Use a presentation-quality left-to-right Mermaid flowchart. Include architecture principles, approval-dependent components, security/audit contracts, and production release gates. Validate Mermaid syntax and return changed paths plus unresolved approvals.
