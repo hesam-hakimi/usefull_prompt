@@ -1,292 +1,350 @@
-# askAlpha — Safety, Observability, Audit, and Answer-Quality Addendum
+# askAlpha — Safety, Observability, Audit, and Quality Addendum
 
-**Status:** Normative roadmap addendum — revision 1.5  
-**Applies to:** `MASTER_PLAN_V1.md`, `PRODUCT_ORDER_AND_BACKLOG.md`, `QUALITY_GATES.md`, and the architecture pack  
-**Source basis:** Findings and recommendations from the LLM Gateway POC review and subsequent architecture review  
-**Purpose:** Record product controls and release gates that were not sufficiently explicit in the original delivery pack.
-
-> This document adds requirements. It does not claim that planned controls are already implemented.
+**Status:** Normative revision 1.6  
+**Relationship to other documents:** The requirements in this addendum are incorporated into the Master Plan, Product Backlog, and Quality Gates. This file retains the detailed rationale and contracts.
 
 ---
 
-## 1. Executive decision
+## 1. Verified current state
 
-The POC demonstrates a useful conversational analytics flow, but broader Beta and production use require three independently governed control planes:
+A read-only audit of the private application repository against `origin/asktd_v2` established the following:
 
-1. **User and data-access audit** — who asked, what data was accessed, and what was exported.
-2. **Agent and LLM decision trace** — how the system planned, called models, selected metadata, reviewed, repaired, and produced the answer.
-3. **Model usage metering** — model, token, latency, retry, agent, route, and cost-accounting facts.
+- React is packaged static output served by FastAPI from one Azure App Service artifact.
+- Browser/API communication uses same-origin HTTPS JSON REST and SSE.
+- MSAL obtains the Entra token in the browser; FastAPI validates bearer JWTs using Entra JWKS.
+- Primary and fallback orchestrators are wired; agents are route-dependent.
+- Azure OpenAI is called directly. No enterprise LLM Gateway is present in the live code path.
+- Current validation is in-process application logic, not a standalone service.
+- SQL safety/authorization validation occurs after generated SQL and before DB execution.
+- Azure SQL supports analytics plus authorization/control/diagnostic responsibilities.
+- Azure AI Search performs conditional fallback metadata text search, not vector/hybrid retrieval.
+- Redis is configured but unused by the runtime.
+- JSON traces/diagnostics exist but do not satisfy durable compliance audit.
+- User-query audit and export audit are absent.
+- Data-access audit is partial: authorization decisions and access-management changes are logged, but complete data-read audit is absent.
+- LangSmith, Azure Sentinel, and Dynatrace are absent; Datadog has a generic workflow option but no runtime integration.
+- Databricks, ADLS, Event Hubs, usage collector, and durable outbox are planned/target only.
 
-These records may share correlation IDs, but they must not be treated as the same record or delegated to one tool without proving complete coverage.
-
----
-
-## 2. Confirmed POC findings and status
-
-| Area | Current evidence | Required product disposition |
-|---|---|---|
-| Pre-LLM filtering | Application-level validation occurs before the model/gateway request to reject harmful or invalid requests and avoid unnecessary model cost. | Formalize as a tested, versioned, observable safety and cost guard. |
-| Reviewer feedback loop | The final reviewer checks whether the generated report answers the question and can return feedback to the first planning/generation step. | Bound retries, time, tokens, and stop conditions; record reviewer reasons and outcomes. |
-| Visualization execution | Visualization code runs in a sandbox, creates plot artifacts such as PNG files, and passes them to the writer/response flow. | Define and test network, filesystem, package, CPU, memory, timeout, artifact, and sanitization restrictions. |
-| Current explainability | Current diagnostic output is primarily JSON showing decisions, semantic/model queries, tables, metadata, and suggested plots. | Preserve machine-readable trace; add a human-readable graph only as a governed future feature. |
-| Cache | No live result cache is currently deployed; repeated questions fetch fresh data from SQL Server. | Introduce caching only after benchmark and security review, with effective-authorization-scope keys and version-aware invalidation. |
-| Answer quality | Quality and generated SQL are currently reviewed manually; hallucinations have been observed. | Add automated golden and unseen-question evaluation, error taxonomy, thresholds, regression evidence, and safe-stop behavior. |
-| POC scale | Current evaluation is limited by access to approximately four tables. | Do not present the POC as enterprise-scale proof; expand evaluation as governed data products are onboarded. |
-| Current metadata sources | Metadata is assembled from EDC, data models, Bitbucket assets, and historical queries. | Add provenance, ownership, versioning, conflict detection, and governed power-user authoring. |
-| User/data/export audit | No complete built-in record currently proves who asked what, saw what data, or exported what. | Treat this as mandatory before broad Beta use with restricted data. |
-| Event transport | Azure Event Hubs was proposed, but the producer/consumer and purpose were not sufficiently clear in the original diagram. | Use Event Hubs only for explicitly defined usage, audit, feedback, or operational events; it is not the analytical query engine. |
-| Enterprise monitoring | Azure Sentinel, Dynatrace, and Datadog were discussed as possible enterprise integrations. | Select approved tools and define responsibility boundaries; do not claim integration before implementation evidence exists. |
-| Confidence display | A percentage/probability score was suggested as an explainability idea. | Treat as an open design item. Prefer evidence indicators unless a score is calibrated and validated. |
+These facts supersede earlier diagrams or statements that contradict them.
 
 ---
 
-## 3. Mandatory product additions
+## 2. Validation and safety boundary
 
-### 3.1 P0/P1 — required before broad Beta or restricted-data use
+### 2.1 Current behavior
 
-#### A. User, data-access, and export auditing
+The current application performs in-process:
 
-For every governed request, record at minimum:
+- request/Pydantic validation;
+- JWT/authentication and authorization validation;
+- configuration validation;
+- prompt-data preparation/safety handling;
+- SQL policy and authorization validation after SQL generation and before execution.
 
-- trace/request ID;
-- trusted subject ID and tenant;
-- effective authorization-scope/version;
-- question/request classification without unnecessary sensitive text;
-- source, dataset, object, and approved field scope;
-- query/plan identifier and policy versions;
-- result shape and row/column counts;
-- export event, format, destination category, and outcome;
-- timestamp, environment, application version, and status;
-- denial and policy-failure reasons;
-- retention and records-management classification.
+There is no separate validation microservice and no live enterprise LLM Gateway.
 
-Raw result rows, secrets, access tokens, and unrestricted prompt/response content must not be copied into audit records.
+### 2.2 Required product hardening
 
-#### B. Automated answer-quality evaluation
-
-Create a versioned evaluation system containing:
-
-- reviewed golden questions;
-- unseen questions not used as prompt examples;
-- expected intent, source, dataset, fields, joins, grain, filters, KPI, and output shape;
-- expected SQL characteristics or approved SQL hash where suitable;
-- expected authorization decision;
-- result reconciliation against trusted baseline reports or source queries;
-- hallucination and error taxonomy;
-- quality thresholds by route and risk;
-- regression history and release comparison;
-- safe clarification or blocked behavior when confidence/evidence is insufficient.
-
-#### C. Formal pre-LLM safety and cost guard
-
-Before any model call:
-
-- validate request shape and size;
-- reject harmful commands and prohibited content;
-- enforce authorization-aware metadata narrowing;
-- enforce route, context, token, retry, and cost limits;
-- avoid sending requests that can be answered deterministically;
-- record a redacted safety decision and policy version;
-- test bypass attempts and failure behavior.
-
-This control complements enterprise gateway filtering; it does not replace the approved LLM Gateway or platform safety controls.
-
-#### D. Bounded reviewer and repair loop
-
-The reviewer/coverage agent must:
-
-- produce structured pass/fail/needs-clarification output;
-- identify the unmet part of the user request;
-- never alter authorization or safety decisions;
-- have bounded retries, time, model calls, and token budget;
-- stop safely after repeated validated failure;
-- record feedback, attempt number, route, and final disposition;
-- avoid infinite or cost-unbounded loops.
-
-#### E. Visualization sandbox hardening
-
-The visualization execution environment must enforce:
-
-- no unrestricted outbound network access;
-- isolated temporary filesystem;
-- allowlisted libraries and file types;
-- CPU, memory, execution-time, output-size, and chart-point limits;
-- no secrets or runtime credentials available to generated code;
-- artifact scanning and sanitization;
-- deterministic cleanup and retention policy;
-- security regression tests for sandbox escape and malicious payloads.
-
-#### F. Minimum operational observability
-
-Before broader rollout, operators must be able to correlate:
+The product must formalize a staged request-safety policy:
 
 ```text
-User Request
-  -> Authentication and Authorization
-  -> Safety Decision
-  -> Semantic Plan
-  -> Model and Data Calls
-  -> Reviewer Outcome
-  -> Final Response or Failure
+Request
+  → schema/size validation
+  → identity and authorization context
+  → harmful/unsupported/prompt-injection policy
+  → route and data-scope eligibility
+  → approved model call when needed
+  → generated-SQL policy/authorization validation
+  → data execution
 ```
 
-Logs and traces must be redacted and access-controlled.
+Where a request can be safely rejected before a model call, tests must prove that no provider call and no provider cost occurred.
+
+### 2.3 Required evidence
+
+- reason code for blocked/clarified requests;
+- redacted trace/audit reference;
+- tests for prompt injection and policy override attempts;
+- proof that metadata instructions cannot weaken runtime controls;
+- no standalone-service claim unless the architecture actually changes.
 
 ---
 
-### 3.2 P2 — scale, operability, and governed self-service
+## 3. Three distinct correlated record streams
 
-#### A. Human-readable explainability view
+The product requires three separate records with common correlation IDs.
 
-Provide an authorized visual trace showing major steps and outcomes without exposing prompts, hidden reasoning, sensitive metadata, SQL literals, or unauthorized object names.
+### 3.1 User/data/export audit
 
-Recommended display elements:
+Purpose: compliance, investigation, accountability, records management.
 
-- route selected;
-- authorized source/dataset;
-- metadata and KPI versions;
-- SQL validation status;
+Minimum fields:
+
+- `request_id`, `trace_id`;
+- trusted `subject_id`, tenant, application/environment;
+- authorization version and scope hash;
+- operation and route;
+- source/data product/dataset/object/field references;
+- query/result outcome and permitted summary metrics such as row count;
+- export/download/print action where applicable;
+- timestamp, latency, app version;
+- audit-delivery status.
+
+Do not store raw result rows unless separately approved.
+
+### 3.2 Agent/LLM decision trace
+
+Purpose: explainability, debugging, quality improvement.
+
+Minimum fields:
+
+- plan and metadata/KPI versions;
+- route and agent transitions;
+- validation outcomes;
+- model-call references;
+- retry/repair/escalation/reviewer feedback;
+- stop reason;
+- approved redacted evidence references.
+
+### 3.3 Model usage event
+
+Purpose: operational usage, cost, showback, reconciliation, future approved chargeback.
+
+Minimum fields:
+
+- `model_call_id`, `request_id`, `trace_id`;
+- requested/actual model and deployment;
+- policy version, agent, route, reason, attempt;
+- provider-observed input/output/total usage and status;
+- latency and result status;
+- trusted organizational-attribution snapshot;
+- price-catalog version and cost status.
+
+### 3.4 Separation rule
+
+The streams may be joined through correlation IDs, but they have different:
+
+- authoritative owners;
+- schemas;
+- access controls;
+- retention periods;
+- privacy constraints;
+- reporting purposes.
+
+Model usage is not a substitute for user/data audit. JSON diagnostics are not a substitute for either.
+
+---
+
+## 4. Complete audit requirement
+
+### 4.1 Current gap
+
+Current code has:
+
+- authorization decision logging;
+- SQL-backed access-management change history;
+- debug traces and diagnostics.
+
+It does not have:
+
+- durable user-question audit;
+- complete data-read/object-access audit;
+- backend export audit.
+
+### 4.2 Broad-Beta requirement
+
+Before broad Beta with restricted data, the system must be able to answer:
+
+- who asked;
+- what operation was requested;
+- which authorization policy/version applied;
+- which source/data objects were accessed;
+- what outcome occurred;
+- whether data was exported/downloaded/printed;
+- whether the audit record was delivered successfully.
+
+### 4.3 Audit reliability
+
+- durable write/retry;
+- idempotency;
+- observable failures;
+- least-privilege audit search/export;
+- audit of audit access;
+- retention and legal/compliance approval;
+- redaction and no-secret policy;
+- recovery/replay where required.
+
+---
+
+## 5. Automated answer quality and hallucination control
+
+### 5.1 Current gap
+
+POC review indicated:
+
+- approximately four-table evaluation scope;
+- largely manual output/SQL review;
+- observed hallucinations;
+- no enterprise-scale automated quality proof.
+
+### 5.2 Required evaluation system
+
+- reviewed golden questions;
+- unseen questions;
+- paraphrases and negative examples;
+- expected route/source/dataset/plan;
+- expected fields, joins, grain, filters, and KPI;
+- SQL constraints and safety outcomes;
+- trusted source-query/report reconciliation;
+- no-data, ambiguity, unauthorized, and failure cases;
+- hallucination/error taxonomy;
+- severity and release thresholds;
+- manual adjudication workflow;
+- canary/regression/rollback.
+
+### 5.3 Evidence indicators
+
+Use evidence such as:
+
+- authorization passed;
+- semantic plan validated;
+- SQL safety passed;
+- metadata/source coverage;
 - data freshness;
-- reviewer result;
-- retry count;
-- final evidence and limitation indicators.
+- reviewer outcome;
+- reconciliation status.
 
-#### B. Secure scope-aware cache
+Do not represent an uncalibrated probability percentage as correctness.
 
-Result caching must occur only after authorization and mandatory data security filtering. Cache identity must include:
+---
 
-- environment and source;
+## 6. Bounded reviewer feedback loop
+
+A reviewer may send a draft back for correction, but must be controlled by policy:
+
+- maximum attempts;
+- maximum elapsed time;
+- maximum tokens and request cost;
+- allowed repair categories;
+- no permission/safety override;
+- explicit final stop reason;
+- safe clarification, partial answer, deterministic fallback, or blocked response.
+
+Every iteration creates trace and usage references when the corresponding systems are enabled.
+
+---
+
+## 7. Visualization sandbox security
+
+Any agent/tool that executes visualization code must enforce:
+
+- process isolation;
+- default-deny network;
+- restricted working directory/filesystem;
+- library/import allowlist;
+- no arbitrary package installation;
+- no shell/subprocess access unless explicitly sandboxed and approved;
+- no environment credential/host mount access;
+- CPU, memory, process-count, and timeout limits;
+- input/output size/type validation;
+- image/artifact sanitization;
+- authorization-aware artifact access;
+- retention and cleanup;
+- malicious-code/data-exfiltration tests.
+
+A successful chart render is not sufficient evidence of sandbox safety.
+
+---
+
+## 8. Secure caching
+
+### 8.1 Current state
+
+Redis configuration exists, but no Redis runtime client/path is wired. Current caching is in-process only.
+
+### 8.2 Target contract
+
+Cache security is based on effective authorization scope, not only user ID.
+
+Required result-key fields:
+
+- environment;
+- source/data product/dataset;
 - semantic-plan/query hash;
-- effective authorization-scope hash;
+- authorization-scope hash;
 - authorization version;
-- row/column policy versions;
-- metadata/KPI versions;
+- row/column policy version;
+- metadata/KPI version;
 - data-freshness version;
 - output shape.
 
-Never cache unrestricted results and filter them only in the browser.
+Authorization occurs before lookup and write. An unrestricted result must never be cached and filtered only in the browser.
 
-#### C. Governed power-user metadata authoring
+Redis or another managed cache is introduced only after benchmark, security/lifecycle approval, isolation/freshness testing, observability, and a kill switch.
 
-Power users may propose dataset descriptions, KPIs, glossary terms, examples, negative examples, joins, and instructions through:
+---
+
+## 9. Event Hubs and enterprise monitoring
+
+### 9.1 Current state
+
+Event Hubs and enterprise monitoring integrations are not wired in the current runtime.
+
+### 9.2 Target event flow
 
 ```text
-Draft -> Validate -> Test -> Approve -> Publish -> Monitor -> Rollback/Retire
+Usage / Audit / Agent-Trace Collectors
+  → Durable Outbox
+  → Azure Event Hubs
+  → Databricks Event Processing
+  → ADLS Curated History
+  → Monitoring / Audit / Showback / Reconciliation
 ```
 
-Published metadata must retain source provenance, owner, effective dates, validation evidence, and rollback state.
+Event Hubs is asynchronous event transport. It is not the analytical query engine, metadata store, or answer source.
 
-#### D. Event and monitoring integration
+### 9.3 Tool responsibility
 
-Define event schemas and ownership before enabling Event Hubs or enterprise monitoring integrations.
+An approved enterprise monitoring/SIEM solution may receive operational/security signals. Agent tracing, user/data audit, and usage facts retain their distinct authoritative stores/contracts even when surfaced through common dashboards.
 
-Event categories should be explicit:
-
-- model usage;
-- user/data/export audit;
-- agent/LLM trace;
-- application operations;
-- feedback and quality outcomes.
-
-Event Hubs transports events; Databricks/ADLS processes and retains analytical history; approved monitoring/SIEM tools support operational and security monitoring.
+Do not claim Azure Sentinel, Dynatrace, Datadog, or LangSmith integration until the chosen tool is approved, implemented, and live-verified.
 
 ---
 
-## 4. Confidence and evidence policy
+## 10. Release gates added by this addendum
 
-Do not display an uncalibrated confidence percentage as if it proves answer correctness.
+### Broad Beta
 
-Prefer evidence indicators such as:
+- complete user/query/data/export audit;
+- fine-grained fail-closed authorization;
+- automated golden/unseen/reconciliation thresholds;
+- bounded reviewer/model behavior;
+- visualization-sandbox security tests;
+- no sensitive leakage in logs/traces/audit/usage;
+- current architecture revalidated;
+- operational ownership, alerts, runbooks, and rollback.
 
-- authenticated and authorized request;
-- semantic-plan validation passed;
-- metadata/KPI version used;
-- SQL safety validation passed;
-- trusted source and freshness;
-- reviewer/coverage result;
-- baseline reconciliation status;
-- known limitations or unresolved ambiguity.
+### Production
 
-A numeric score may be introduced only after calibration, reliability analysis, user research, threshold approval, and evidence that users interpret it correctly.
-
----
-
-## 5. Architecture implications by stage
-
-### Current POC
-
-- Preserve the application-level pre-LLM validation control.
-- Preserve current JSON diagnostic traces.
-- Document the reviewer feedback loop and sandboxed visualization execution.
-- Clearly state that complete user/data/export auditing, live caching, and visual explainability are not yet implemented.
-- Clearly state the limited four-table evaluation scope.
-
-### MVP1
-
-- Add governed data-product onboarding and Databricks/ADLS connectivity only after access approval.
-- Require golden plus unseen-question evaluation against trusted baseline reports.
-- Require a minimum user/query/data-access audit before business-user testing on restricted data.
-- Preserve bounded safety, authorization, reviewer, and sandbox controls.
-- Do not make broad report-rationalization commitments until output reconciliation is proven for the pilot reports.
-
-### Target production
-
-- Keep user/data/export audit, agent/LLM trace, and model usage metering as distinct correlated streams.
-- Use a durable outbox and explicit event schemas for recoverable delivery.
-- Integrate with approved enterprise monitoring/SIEM tooling.
-- Apply fail-closed authorization before aggregation, cache, visualization, report generation, and export.
-- Require operational ownership, retention, incident response, replay, and evidence-based release gates.
+- supported environment and IAM topology;
+- row-level authorization for all restricted data;
+- approved audit retention/SIEM integration;
+- event delivery/replay/dead-letter if event pipeline enabled;
+- cache isolation/freshness if cache enabled;
+- capacity/recovery/canary/rollback;
+- usage reconciliation and approvals before chargeback.
 
 ---
 
-## 6. Demo and stakeholder communication rules
+## 11. Stop-the-line conditions
 
-- Label fabricated or illustrative data clearly.
-- Distinguish implemented, technically validated, planned, target, and open-for-confirmation capabilities.
-- Do not present the four-table POC as proof of broad enterprise scale.
-- Position askAlpha as complementary to Power BI: conversational/ad-hoc exploration versus regulatory, scheduled, structured, or pixel-perfect reporting.
-- Do not present Event Hubs, cache, enterprise monitoring, visual explainability, chargeback, or complete data-access auditing as implemented without repository and environment evidence.
-- Review roadmap and demo materials with the named product/stakeholder owners before wider distribution.
-
----
-
-## 7. Release-gate additions
-
-Broad Beta with restricted data is blocked unless all of the following are true:
-
-- user/data/export audit completeness is tested;
-- authorization is fail-closed and enforced before aggregates and outputs;
-- pre-LLM safety controls pass bypass tests;
-- automated evaluation meets approved quality thresholds;
-- hallucination and material-answer-error rates are within approved limits;
-- reviewer loops are bounded and observable;
-- visualization sandbox security tests pass;
-- logs and traces are redacted;
-- baseline-report reconciliation passes for the selected pilot use cases;
-- rollback and emergency-disable procedures are demonstrated.
-
-Production is additionally blocked unless:
-
-- enterprise monitoring/SIEM ownership and integration are approved;
-- retention and records-management requirements are satisfied;
-- Event Hubs/outbox replay and dead-letter recovery are tested if enabled;
-- scope-aware cache isolation and invalidation tests pass if cache is enabled;
-- usage, audit, and agent-trace streams can be reconciled by request ID without exposing sensitive content.
-
----
-
-## 8. Backlog mapping
-
-These requirements refine the existing backlog as follows:
-
-- **Epic 2:** add unseen-question evaluation, hallucination taxonomy, and baseline reconciliation.
-- **Epic 4:** add evidence indicators and bounded clarification/reviewer contracts.
-- **Epic 8:** add pre-LLM safety guard and visualization-sandbox security controls.
-- **Epic 9:** separate user/data/export audit from agent/LLM trace and operational observability.
-- **Epic 9A:** retain model-usage metering as a distinct correlated stream.
-- **Epic 10:** add enterprise monitoring integration and audit-storage verification to deployment smoke tests.
-- **Epic 12:** require authorization-scope-aware cache keys and invalidation.
-- **Epic 13:** add metadata provenance for EDC, data models, Bitbucket, and historical-query sources.
-- **Epic 14:** require export audit and sandboxed visualization traceability.
-
-Until the master plan is consolidated into a later revision, this addendum is the controlling requirement where it is more specific than the earlier documents.
+- unaudited required access/export;
+- authorization failure open;
+- sensitive data in logs/traces/audit/usage;
+- sandbox escape;
+- unbounded reviewer/model loop;
+- material quality/reconciliation failure;
+- cross-scope cache leakage;
+- current documentation falsely presents planned/configured-unused components as implemented;
+- fabricated demo data presented as real;
+- unrecoverable required audit/usage event loss.
