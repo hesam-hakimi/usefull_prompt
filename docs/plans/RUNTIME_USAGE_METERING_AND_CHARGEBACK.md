@@ -1,357 +1,364 @@
-# askAlpha — Runtime Usage Metering and Chargeback Design
+# askAlpha — Runtime Usage Metering, Showback, Reconciliation, and Chargeback
 
-**Status:** Proposed implementation standard — revision 1.0  
-**Scope:** Per-model-call token metering, per-request aggregation, user/team/department attribution, showback, and governed chargeback for the askAlpha/KMAI server runtime.  
-**Decision:** Start by recording every model API call, then aggregate through the organizational hierarchy for reporting and billback.
+**Status:** Planned target contract — revision 1.6  
+**Current-state warning:** The verified private runtime does not contain a live usage collector, durable outbox, Event Hubs pipeline, or chargeback implementation. These components must not be presented as current.
 
----
+## 1. Purpose
 
-## 1. Objective
-
-Capture the actual input and output token usage for every Azure OpenAI/model API call made by the askAlpha agentic runtime, attribute that usage to the authenticated user and the user's effective team hierarchy, and aggregate it for operational reporting, showback, budget management, and eventual chargeback.
-
-The first release should produce trustworthy usage and estimated-cost reporting. Formal financial chargeback should be enabled only after Finance/Platform owners approve pricing, allocation, reconciliation, retention, and dispute rules.
-
----
-
-## 2. Core principles
-
-1. **Meter every real model call.** Record all agent calls, retries, repair attempts, fallbacks, escalations, and reviewer calls—not only the final answer.
-2. **Aggregate by user request.** A single user request may invoke several agents and models; the request total is the sum of its model-call events.
-3. **Use authenticated identity.** Derive the user from validated Entra/backend identity context. Never trust a client-supplied user or team identifier.
-4. **Snapshot organizational attribution.** Record the effective user, team, department, and cost-center assignment at call time so historical reports do not change when people move teams.
-5. **Separate usage from content.** Store counts, approved identifiers, hashes, status, and routing metadata. Do not store raw prompts, responses, SQL literals, result rows, tokens, secrets, or unrestricted claims in the usage fact table.
-6. **Do not estimate silently.** When the provider does not return usage, store `usage_status=not_observed`; estimation must be explicit, separately labeled, and excluded from reconciled chargeback unless approved.
-7. **Pricing is versioned configuration.** Model/deployment rates, currency, effective dates, discounts, and allocation rules must not be hardcoded in orchestration logic.
-8. **Showback before chargeback.** Validate attribution and reconcile totals before using the data for actual billing.
-9. **Metering must not break chat.** Persist through a durable outbox or equivalent retry mechanism. A reporting-store outage must not fail a user answer, but lost usage events must be observable and recoverable.
-10. **Idempotent and auditable.** Each model call has a unique idempotency key and every price or attribution change is traceable.
-
----
-
-## 3. Target flow
+Capture every actual model-provider call, aggregate calls to the originating authenticated request, attribute usage through a governed organization hierarchy, and progress safely through:
 
 ```text
-Authenticated user request
-        ↓
-Request/trace context created
-        ↓
-Authorized org hierarchy resolved
-        ↓
-RuntimeModelPolicy selects deployment
-        ↓
-Agent invokes model API
-        ↓
-Usage extractor reads provider response/final stream chunk
-        ↓
-Append-only ModelUsageEvent written to durable outbox
-        ↓
-Usage event store
-        ├── per-request summary
-        ├── daily aggregates
-        ├── monthly user/team/department/cost-center aggregates
-        └── pricing and invoice reconciliation
-        ↓
-Admin/Finance reporting, showback, budget alerts, and approved chargeback export
+Metering → Showback → Provider-Bill Reconciliation → Approved Chargeback
 ```
 
-The usage collector wraps the model client or gateway once. Individual agents should not implement separate token-accounting logic.
+Formal chargeback is disabled until completeness, reconciliation, governance, privacy, Finance, Product, Platform, and Security approvals are proven.
 
----
+## 2. Separation from audit and trace
 
-## 4. Runtime event contract
+Three record streams are required:
 
-Create one append-only event for every actual model API call.
+1. **Model usage event** — provider calls, tokens, latency, model, cost status.
+2. **User/data/export audit event** — who requested/accessed/exported what under which authorization.
+3. **Agent/LLM decision trace** — route, plan, agent transitions, validation, repair, reviewer feedback.
 
-### 4.1 Required identity and hierarchy fields
+They share correlation identifiers but are not substitutes for one another.
 
-- `model_call_id` — globally unique idempotency key.
-- `request_id` — user-visible request correlation identifier.
-- `trace_id` and `parent_span_id`.
-- `subject_id` — stable authenticated Entra object identifier or approved pseudonymous equivalent.
-- `team_id` and `team_name_snapshot`.
-- `department_id` and `department_name_snapshot`.
-- `cost_center_id`.
-- `org_path_snapshot` — approved hierarchy identifiers at event time.
-- `org_assignment_version` and `org_effective_at`.
+### Common identifiers
 
-Display names and email addresses should live in a protected identity dimension rather than the usage fact table unless governance explicitly approves otherwise.
+- `request_id`
+- `trace_id`
+- `subject_id`
+- `authorization_version`
+- `app_version`
+- `environment`
 
-### 4.2 Model-routing fields
+### Usage-specific identifier
 
-- `agent_name` or runtime function.
-- `route` and `intent`.
-- `policy_id`, `policy_version`, and `risk_tier`.
-- `requested_model_alias` and `actual_model_or_deployment`.
-- `fallback_reason`, `escalation_reason`, and `attempt_number`.
-- `prompt_template_version`, `metadata_version`, and applicable KPI/plan version.
+- `model_call_id`
 
-### 4.3 Usage and outcome fields
+## 3. Current baseline
 
-- `input_tokens`.
-- `output_tokens`.
-- `total_tokens`.
-- Optional provider-supported fields such as cached-input, reasoning, or audio tokens, stored separately rather than mixed into generic totals.
-- `usage_status`: `observed`, `partial`, `not_observed`, or `estimated`.
-- `started_at`, `completed_at`, and `latency_ms`.
-- `status`: success, validation failure, timeout, provider error, safe stop, or cancelled.
-- `structured_output_valid`.
-- `authorization_result` and `sql_policy_result` when applicable.
-- `answer_produced` and `request_completed`.
-- `environment`, `region`, and application version.
+Repository audit confirmed:
 
-### 4.4 Cost fields
+- model calls currently go directly to Azure OpenAI through SDK/AutoGen configuration;
+- JSON traces/diagnostics may exist in authorized debug responses;
+- no live `ModelUsageCollector` was found;
+- no durable outbox was found;
+- no Event Hubs runtime path was found;
+- Databricks/ADLS usage processing is planned only;
+- user-query/export audit is absent and data-access audit is partial.
 
-- `price_catalog_version`.
-- `currency` — configurable; use `CAD` for the initial Canadian reporting profile unless Finance specifies another billing currency.
-- `input_rate_per_million`.
-- `output_rate_per_million`.
-- Optional cached/reasoning-token rates when applicable.
-- `estimated_cost`.
-- `cost_status`: `estimated`, `reconciled`, `final`, or `excluded`.
-- `reconciliation_batch_id` when matched to provider billing.
+This document defines future implementation requirements, not current behavior.
 
-Example calculation:
+## 4. Event granularity
+
+Create one idempotent usage event for every actual provider call, including:
+
+- initial call;
+- retry;
+- repair;
+- fallback;
+- escalation;
+- reviewer call;
+- shadow/canary call;
+- streaming call;
+- failed, timed-out, cancelled, or partial call when provider interaction occurred.
+
+Do not record only the final successful answer.
+
+## 5. Model usage event contract
+
+Minimum fields:
+
+### Identity and correlation
+
+- `model_call_id`
+- `request_id`
+- `trace_id`
+- trusted `subject_id`
+- tenant/application/environment/region
+- session/conversation reference where approved
+
+### Organization snapshot
+
+- team
+- department/LOB
+- cost center
+- assignment source/version/effective time
+- attribution status
+
+The hierarchy is resolved from trusted backend identity and governed effective-dated data. Client-supplied hierarchy values are ignored.
+
+### Runtime context
+
+- agent/task/route/intent
+- semantic-plan/metadata/KPI/model-policy versions
+- requested and actual model/deployment
+- selection/escalation reason
+- attempt type and sequence
+- risk/complexity tier
+
+### Provider usage
+
+- input tokens
+- output tokens
+- total tokens
+- supported cached/reasoning/audio categories
+- usage status: `observed`, `partial`, `not_observed`
+- provider request/correlation ID where available
+
+Missing usage is not silently estimated as authoritative usage.
+
+### Timing and outcome
+
+- start/end/latency
+- success/failure/timeout/cancel status
+- validation/reviewer outcome
+- error class without sensitive content
+- streaming/non-streaming marker
+
+### Cost
+
+- price-catalog version
+- estimated cost
+- cost status: `estimated`, `reconciled`, `final`, `excluded`
+- reconciliation batch/period
+- adjustment reference where applicable
+
+## 6. Privacy and prohibited content
+
+Usage facts must not contain:
+
+- raw prompts;
+- raw responses;
+- SQL literals or full generated SQL;
+- result rows;
+- access tokens or credentials;
+- secrets;
+- raw group claims;
+- unnecessary personal or sensitive business content.
+
+Use version IDs, hashes, classifications, reason codes, counts, and protected trace references instead.
+
+## 7. Request usage summary
+
+Aggregate every linked call into one request summary:
+
+- total calls;
+- models/deployments used;
+- retry/repair/fallback/escalation counts;
+- total input/output/overall usage;
+- total latency and model latency;
+- estimated/reconciled cost;
+- usage completeness;
+- attribution completeness;
+- final request outcome.
+
+A request that triggers six calls must not appear as one provider call.
+
+## 8. Reliability architecture
+
+Target flow:
 
 ```text
-estimated_cost_cad =
-    (input_tokens  / 1,000,000 × input_rate_cad_per_million)
-  + (output_tokens / 1,000,000 × output_rate_cad_per_million)
-  + approved additional token-category charges
+Model call wrapper
+  → ModelUsageCollector
+  → Durable Outbox transaction
+  → Azure Event Hubs
+  → Databricks event processing
+  → ADLS append-only history
+  → request/daily/monthly aggregates
+  → showback/reconciliation
 ```
 
-Do not include tax, enterprise discount, reserved capacity, or shared platform overhead until the approved allocation policy defines them.
+### Reliability requirements
 
----
+- idempotent `model_call_id`;
+- durable outbox;
+- retry with backoff;
+- dead-letter handling;
+- replay and recovery;
+- duplicate detection;
+- backlog age/throughput alerts;
+- schema versioning;
+- no chat failure solely because reporting transport is unavailable.
 
-## 5. Recommended storage model
+Event Hubs is asynchronous event transport. It is not the user-query engine or analytical answer source.
 
-### `ai_model_usage_event`
+## 9. Logical data model
 
-Append-only event-level fact table. One row per actual provider model call.
+Recommended entities:
 
-### `ai_request_usage_summary`
+- `ai_model_usage_event`
+- `ai_request_usage_summary`
+- `ai_usage_daily_aggregate`
+- `ai_usage_monthly_showback`
+- `ai_usage_monthly_chargeback`
+- `ai_model_price_catalog`
+- `user_org_assignment`
+- `usage_delivery_exception`
+- `usage_reconciliation_batch`
+- `chargeback_adjustment`
+- `chargeback_period_close`
 
-One row per askAlpha user request, aggregating every agent/model call, retry, and escalation linked to the request.
+User/data/export audit and agent traces use separate entities/contracts.
 
-### `ai_usage_daily_aggregate`
+## 10. Price catalog
 
-Daily totals by user, team, department, cost center, model, agent, route, environment, and policy version.
+The catalog is:
 
-### `ai_usage_monthly_chargeback`
+- versioned;
+- effective-dated;
+- model/deployment/region/usage-category aware;
+- owned by a named Finance/Platform function;
+- auditable and rollback-capable.
 
-Monthly controlled snapshot used for showback and, after approval, chargeback. Include allocation status, reconciliation status, owner approval, and dispute status.
+Historical events retain the price version used. A price change does not silently rewrite closed history.
 
-### `ai_model_price_catalog`
+## 11. Showback
 
-Effective-dated price records by provider, model/deployment alias, region, token category, currency, and contract version.
+Showback reports usage and estimated/reconciled cost without creating a financial posting.
 
-### `user_org_assignment`
+Required dimensions:
 
-Effective-dated hierarchy mapping from authenticated subject to team, department, and cost center. Event rows also retain the approved snapshot to protect historical attribution.
+- user;
+- team;
+- department/LOB;
+- cost center;
+- model/deployment;
+- agent/task/route;
+- environment;
+- day/month;
+- usage/cost status.
 
-For the initial release, Azure SQL can hold these records if scale is acceptable. The interfaces should remain storage-neutral so usage events and aggregates can later move to Databricks without changing model-call instrumentation.
+Protected reporting and exports require least privilege and audit.
 
----
+## 12. Provider-bill reconciliation
 
-## 6. Collection behavior
+Before chargeback:
 
-### Standard non-streaming call
+- event totals reconcile to request summaries;
+- request totals reconcile to daily/monthly aggregates;
+- aggregate totals reconcile to provider billing within approved tolerance;
+- missing/duplicate/unattributed events are resolved or explicitly excluded;
+- price and allocation versions are approved;
+- material variance has an owner and disposition.
 
-Read provider usage metadata from the completed response and persist the event in a `finally`-safe instrumentation wrapper.
+## 13. Chargeback controls
 
-### Streaming call
+Formal chargeback requires:
 
-Collect usage from the provider's final stream chunk or final response metadata. Do not emit the final usage event until the stream is complete, cancelled, timed out, or failed. Record partial/not-observed status when usage is unavailable.
+- approved allocation method;
+- complete/reconciled usage period;
+- named Finance, Platform, Product, Security/privacy, and relevant owner approvals;
+- monthly freeze/close;
+- auditable adjustment rather than direct edit;
+- dispute workflow;
+- protected export;
+- retention and records-management policy;
+- rollback/correction procedure.
 
-### Retries, repair, fallback, and escalation
+Estimated or unreconciled data must never be labeled final chargeback.
 
-Each actual provider call gets its own `model_call_id`. A request summary aggregates all calls, including unsuccessful validation/repair attempts, because they still consume tokens and cost.
+## 14. Missing-usage and attribution handling
 
-### Failure handling
+### Missing provider usage
 
-- Persist an event for failed or cancelled calls when a provider request was made.
-- Use a durable outbox with retry and dead-letter monitoring.
-- Protect the user-facing response from metering-store latency or outage.
-- Alert when events cannot be delivered or observed usage is unexpectedly missing.
-- Prevent duplicates through `model_call_id` uniqueness.
+- set `usage_status = not_observed` or `partial`;
+- retain call identity/outcome;
+- alert/queue for investigation;
+- do not fabricate authoritative token counts.
 
----
+### Missing organization assignment
 
-## 7. Organizational attribution
-
-Resolve hierarchy from a trusted backend source such as governed access mappings, an approved directory feed, or an HR/team hierarchy service.
-
-Recommended hierarchy:
-
-```text
-User → Team → Department/Line of Business → Cost Center
-```
-
-Rules:
-
-- Resolve and snapshot the hierarchy before or during request initialization.
-- Preserve effective dates and source version.
-- Never accept team or cost center from the browser as authoritative.
-- Support unassigned/unknown attribution as a visible exception queue rather than silently assigning it to a default team.
-- Historical events keep their original hierarchy snapshot; later hierarchy corrections use an auditable adjustment process.
-- Restrict per-user details to approved administrators, Finance, and authorized managers. General dashboards should default to team/department aggregates.
-
----
-
-## 8. Reporting and APIs
-
-Minimum reports:
-
-- Input/output/total tokens by day and month.
-- Usage and estimated cost by user, team, department, and cost center.
-- Usage by model, deployment, agent, route, intent, and policy version.
-- Cost per successful answer and per report.
-- Retry, escalation, fallback, timeout, and failed-call cost.
-- Budget versus actual and anomaly alerts.
-- Unattributed usage and missing provider-usage metadata.
-- Estimated versus reconciled totals.
-
-Suggested protected endpoints:
-
-- `GET /api/admin/usage/summary`
-- `GET /api/admin/usage/by-user`
-- `GET /api/admin/usage/by-team`
-- `GET /api/admin/usage/by-department`
-- `GET /api/admin/usage/by-model`
-- `GET /api/admin/usage/reconciliation`
-- `POST /api/admin/usage/export`
-
-All endpoints require explicit reporting permissions, server-side filtering, pagination, date limits, audit logging, and export controls.
-
----
-
-## 9. Showback and chargeback lifecycle
-
-### Stage 1 — Metering
-
-Capture provider-observed usage for every call and prove completeness, idempotency, and redaction.
-
-### Stage 2 — Showback
-
-Publish informational user/team/department reports. Validate hierarchy attribution, pricing, and dispute workflows without financial posting.
-
-### Stage 3 — Reconciliation
-
-Compare event totals with Azure/provider billing records, discounts, credits, and shared platform costs. Investigate material differences.
-
-### Stage 4 — Chargeback
-
-Produce a frozen monthly allocation only after Finance, Platform, Product, and Security approve the calculation and reporting controls.
-
-Recommended status flow:
-
-```text
-draft → calculated → reviewed → reconciled → approved → exported → closed
-```
-
-Corrections create adjustment records; they do not overwrite closed historical allocations.
-
----
-
-## 10. Security, privacy, and retention
-
-- Treat per-user usage as controlled employee/operational data.
-- Complete privacy and records-management review before long-term per-user retention.
-- Store the minimum identity information required for attribution.
-- Encrypt in transit and at rest.
-- Apply least-privilege RBAC and row-level reporting restrictions where needed.
-- Audit report views, exports, price changes, hierarchy changes, and chargeback approvals.
-- Never store prompts/responses merely to support token counting.
-- Define event, aggregate, export, and audit retention separately.
-- Provide a documented process for identity deletion/pseudonymization where policy requires it without corrupting financial audit records.
-
----
-
-## 11. Implementation slices
-
-### Slice A — Instrumentation foundation
-
-- Introduce `ModelUsageCollector` around the shared Azure OpenAI/model client.
-- Create typed `ModelUsageEvent` and `RequestUsageSummary` contracts.
-- Capture actual provider usage for streaming and non-streaming calls.
-- Add request/trace/model-call correlation and idempotency.
-- Persist through a durable outbox.
-
-### Slice B — Identity and hierarchy attribution
-
-- Resolve authenticated subject from backend auth context.
-- Add effective-dated team/department/cost-center mapping.
-- Snapshot the hierarchy on each event.
-- Add unattributed-usage monitoring.
-
-### Slice C — Pricing and aggregation
-
-- Add versioned price catalog and estimated-cost calculator.
-- Build request, daily, and monthly aggregates.
-- Reconcile event totals against request totals.
-
-### Slice D — Reporting and showback
-
-- Add protected admin APIs and dashboards/exports.
-- Add budget and anomaly alerts.
-- Validate with Finance and team owners.
-
-### Slice E — Reconciliation and approved chargeback
-
-- Import provider billing summaries.
-- Reconcile usage and cost.
-- Add frozen monthly allocation, approval, adjustment, dispute, and export workflows.
-
----
-
-## 12. Tests and quality gates
+- mark attribution exception;
+- do not silently assign a default team/cost center;
+- route to governed resolution queue;
+- preserve the user/request timestamp and assignment evidence.
+
+## 15. Security and access
+
+- authoritative identity is backend validated;
+- usage APIs and exports are role/entitlement protected;
+- per-user employee usage is treated as sensitive operational information;
+- client cannot submit authoritative token/cost/model/identity values;
+- raw prompt/result content is prohibited;
+- access to price/reconciliation/closed periods is separated by duty;
+- all exports and adjustments are audited.
+
+## 16. Tests
 
 ### Unit
 
-- Usage extraction for each supported response shape.
-- Streaming final-chunk handling.
-- Cost calculation by price version and token category.
-- Hierarchy effective-date selection and snapshot behavior.
-- Idempotency and duplicate prevention.
-- Redaction and serialization.
+- provider usage extraction;
+- event validation/serialization;
+- request aggregation;
+- hierarchy snapshot;
+- price selection and cost calculation;
+- idempotency/duplicate prevention;
+- redaction/prohibited-field checks.
 
 ### Integration
 
-- Multi-agent request with several model calls.
-- Retry/escalation totals.
-- Timeout, cancellation, and provider error.
-- Outbox retry and dead-letter recovery.
-- Authentication-derived user attribution.
-- Daily/monthly aggregation and export authorization.
+- streaming final usage;
+- retry/repair/fallback/escalation aggregation;
+- timeout/cancellation/partial usage;
+- outbox retry/dead-letter/replay;
+- identity/hierarchy attribution;
+- event-to-request-to-aggregate reconciliation;
+- protected reporting/export/adjustment.
 
-### Reconciliation
+### Security
 
-- Sum of model-call events equals request summary.
-- Sum of request summaries equals daily/monthly aggregates.
-- Aggregate totals reconcile to provider billing within an approved tolerance.
-- Closed chargeback periods cannot be edited directly.
+- spoofed subject/hierarchy/model/token/cost;
+- unauthorized reporting/export;
+- prohibited raw content in records;
+- closed-period direct edit;
+- audit of usage-report access.
 
-### Security/privacy
+### Performance
 
-- Client cannot spoof user/team/cost center.
-- Unauthorized users cannot access per-user reports or exports.
-- Usage records contain no prompt, response, SQL literal, secret, token, or raw result data.
-- Report and export access is audited.
+- instrumentation overhead;
+- event throughput/backlog age;
+- recovery time;
+- aggregate refresh/report latency.
 
----
+## 17. Acceptance gates
 
-## 13. Acceptance criteria
+### Metering gate
 
-- Every actual model API call creates exactly one idempotent usage event or a visible recoverable delivery failure.
-- Input, output, and total tokens are captured from provider usage metadata when available.
-- Every event is linked to request, trace, agent, route, policy version, requested/actual model, attempt, and outcome.
-- Authenticated user and effective team/department/cost-center hierarchy are attributed and snapshotted.
-- All retries, fallbacks, escalations, and failed provider calls contribute to request and cost totals.
-- Raw prompts, responses, SQL literals, secrets, and result rows are absent from usage facts.
-- Price configuration is effective-dated, versioned, auditable, and rollback-capable.
-- User, team, department, model, agent, and route aggregates reconcile to event-level records.
-- Missing usage and unattributed hierarchy are visible operational exceptions.
-- Showback reports are available before chargeback is enabled.
-- Formal chargeback requires provider-bill reconciliation and named Finance/Platform/Product/Security approvals.
-- Metering failure does not fail the user request, and undelivered events are durably retried and alerted.
+- every provider call produces one event or visible recoverable delivery failure;
+- all request-linked calls aggregate correctly;
+- no prohibited sensitive content;
+- chat survives reporting transport outage;
+- duplicates are prevented.
+
+### Showback gate
+
+- attribution and aggregate completeness meet threshold;
+- protected reports/exports are audited;
+- representative team owners review results.
+
+### Reconciliation gate
+
+- provider-bill variance is within approved tolerance;
+- unresolved exceptions have owner/disposition;
+- price catalog is approved.
+
+### Chargeback gate
+
+- all prior gates pass;
+- approvals and financial close controls exist;
+- adjustments/disputes are auditable;
+- final labels are accurate.
+
+## 18. Stop-the-line conditions
+
+- client can spoof authoritative fields;
+- usage records contain prohibited content;
+- material calls are missing, duplicated, or unrecoverable;
+- request/aggregate/provider totals cannot reconcile;
+- unauthorized users can access employee/team usage;
+- estimated cost is shown as final chargeback;
+- closed periods can be changed without adjustment/approval;
+- documentation presents planned metering/event components as current.
