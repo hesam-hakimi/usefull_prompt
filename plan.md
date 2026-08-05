@@ -1,110 +1,119 @@
-Phase 1 implementation begins now.
+Begin Phase 2 implementation planning.
 
-This phase is no longer about documentation, governance, or readiness reports.
+Current context:
 
-From this point forward, prioritize implementation quality, architecture, maintainability, and production-ready design.
+- Phase 0 implementation is technically complete, but formal closure is still pending governance/security approvals.
+- PR #9 has been merged.
+- PR #7 remains subject to its remaining approval and merge process.
+- Phase 1 foundation work exists in PR #10 and has completed local validation.
+- Phase 1 introduced the readiness contract and separated:
+  - implementation status
+  - environment validation status
+  - approval status
+- Phase 1 behavior must remain backward compatible and feature-flagged.
+- Do not deploy.
+- Do not modify Azure resources.
+- Do not merge or alter Phase 0/Phase 1 PRs.
+- Continue from the current Phase 2 branch or create an isolated Phase 2 branch from the correct approved development base.
 
-Current status:
+Your task is to prepare the Phase 2 implementation plan before writing feature code.
 
-- Phase 0 PRs remain open because of governance/security approvals only.
-- Phase 1 work is already isolated in PR #10.
-- Phase 1 must remain completely backward compatible with Phase 0.
-- No deployment is required.
-- No Azure resources should be modified.
-- Development and validation remain local.
+## 1. Determine the exact Phase 2 scope
 
-Your first task is NOT to write large amounts of code.
-
-Instead perform a complete implementation planning pass.
-
-Produce:
-
-# 1. Phase 1 architecture review
-
-Review the current implementation.
+Inspect the repository plans, roadmap, architecture documents, ADRs, existing code, open PRs, and tests.
 
 Identify:
 
-- technical debt
-- duplicated logic
-- abstractions that should be extracted before adding features
-- extension points
-- contracts that should become interfaces/dataclasses
-- serialization boundaries
+- the intended Phase 2 objective
+- the capabilities that belong in Phase 2
+- explicit exclusions
+- dependencies on Phase 0 and Phase 1
+- unresolved assumptions
+- platform or access prerequisites
+- items that must remain planned rather than implemented
+
+Do not infer deployment or approval from the presence of code or configuration.
+
+## 2. Verify the correct branch and dependency chain
+
+Confirm:
+
+- repository
+- current branch
+- branch base
+- current commit SHA
+- whether Phase 2 should be stacked on PR #10 or based on another branch
+- whether the working tree is clean
+- whether any uncommitted or unrelated files exist
+
+Do not modify, commit, push, rebase, merge, or deploy during this step.
+
+## 3. Perform a Phase 2 architecture review
+
+Review the current implementation and identify:
+
+- reusable Phase 1 contracts
+- missing interfaces or abstractions
 - API boundaries
-- validation boundaries
+- orchestration boundaries
+- identity and authorization boundaries
+- validation and evidence boundaries
+- serialization and backward-compatibility concerns
+- technical debt that would block Phase 2
+- components that must not be coupled to Azure deployment state
 
-Do not change anything yet.
+## 4. Break Phase 2 into small implementation slices
 
----
+Produce independent PR-sized slices.
 
-# 2. Phase 1 implementation roadmap
+For each slice include:
 
-Break the remaining Phase 1 into small independent pull-request sized slices.
+- purpose
+- user-visible outcome
+- exact files or modules likely affected
+- dependencies
+- implementation approach
+- risks
+- security impact
+- backward-compatibility impact
+- required unit tests
+- required integration or smoke tests
+- feature flags
+- rollback approach
+- acceptance criteria
 
-Each slice should contain:
+Prefer small, independently reviewable slices over one large PR.
 
-Purpose
+## 5. Recommend execution order
 
-Files affected
+Provide a dependency-ordered sequence such as:
 
-Dependencies
-
-Risk
-
-Estimated size
-
-Required tests
-
-Rollback strategy
-
-Expected API changes
-
-Backward compatibility impact
-
-Review complexity
-
----
-
-# 3. Recommend implementation order
-
-Sort every slice by dependency.
-
-The result should be an execution plan like:
-
-PR A
+Phase 2A
 ↓
-
-PR B
-
+Phase 2B
 ↓
+Phase 2C
 
-PR C
+Clearly identify the first slice that can be implemented and validated entirely locally without deployment or pending external approval.
 
-↓
+## 6. Final output
 
-PR D
+Return:
 
-where every PR can be independently reviewed and tested.
+1. confirmed Phase 2 scope
+2. branch/base recommendation
+3. architecture findings
+4. ordered implementation slices
+5. blockers and external dependencies
+6. recommended first implementation slice
+7. exact next prompt for implementing that first slice
 
----
+Do not write feature code yet.
 
-# 4. Verify current implementation
-
-Confirm that the current branch is still clean.
-
-Run existing tests only if necessary.
-
-Do not modify code.
+Do not create documentation merely to claim progress.
 
 Do not deploy.
 
-Do not push.
+Do not commit or push.
 
-Do not commit.
-
-Do not create additional branches.
-
-Output only the implementation plan and recommended execution order.
-
-Wait for approval before beginning the first implementation slice.
+Wait for explicit approval before implementing the first Phase 2 slice.
