@@ -1,88 +1,48 @@
+# askAlpha Architecture Prompt Index
 
-Keep the current Mermaid diagram.
+Use these prompts only as helpers. The versioned files under `docs/architecture/**` and the source-of-truth documents under `docs/plans/**` control the architecture.
 
-Do NOT redesign it.
+## Available prompts
 
-Only refine it.
+- `P1.md` — verify and generate the **Current** architecture from private-repository evidence.
+- `P2.md` — generate the **MVP1 SpruceX planned** architecture from the verified current baseline.
+- `P3` — generate the **Target Enterprise Production** architecture with explicit approval-dependent components.
 
-Required changes
+## Non-negotiable rules
 
-1. Remove "Business Orchestrator".
+1. Never update current architecture from roadmap or meeting statements alone.
+2. Use status labels: current, technically validated, observed in POC, configured-unused, partial, planned, target, open.
+3. Correct identity direction:
+   - browser/MSAL obtains token from Entra;
+   - browser sends bearer token to FastAPI;
+   - FastAPI validates using Entra JWKS.
+4. Show JSON REST and SSE.
+5. Show React as packaged static output served by FastAPI unless implementation changes.
+6. Show Azure SQL with analytics plus authorization/control/diagnostic roles.
+7. Show Azure AI Search as conditional fallback metadata text search in the current view.
+8. Do not show a standalone validation service when validation is in-process.
+9. Do not show Redis, Databricks, ADLS, Event Hubs, usage collector, durable outbox, LangSmith, Sentinel, Dynatrace, or Datadog runtime monitoring as current without live evidence.
+10. Update each `.mmd` source and matching `.md` preview together.
 
-2. Replace it with "FastAPI API".
+## Save locations
 
-3. Show communication as
+```text
+docs/architecture/current/current_architecture.mmd
+docs/architecture/current/current_architecture.md
 
-Users
-↓
-React SPA
-↓
-HTTPS REST API
-↓
-FastAPI API
+docs/architecture/mvp1/mvp1_architecture.mmd
+docs/architecture/mvp1/mvp1_architecture.md
 
-4. Move Azure AI Search out of the Data Platform.
-
-Azure Cloud should contain
-
-- Microsoft Entra ID
-- Managed Identity
-- Azure OpenAI
-- Azure AI Search
-
-Data Platform should contain
-
-- Azure SQL
-
-5. Keep Azure SQL as the only data platform component.
-
-6. Keep node labels short.
-
-7. Remove unnecessary implementation terminology.
-
-8. Keep the same visual style.
-
-9. Keep the same colors.
-
-10. Keep the same layout.
-
-11. Produce presentation-quality Mermaid.
-
----
-
-Save the output instead of printing it in chat.
-
-Create the following file if it does not already exist:
-
-docs/presentations/architecture/current/current_architecture.mmd
-
-The file must contain:
-
-- Mermaid flowchart
-- Title
-- Legend
-- Short description at the top
-
-Also generate a Markdown preview file:
-
-docs/presentations/architecture/current/current_architecture.md
-
-The Markdown file should contain:
-
-# Current Architecture
-
-A short description.
-
-Then embed the Mermaid diagram using
-
-```mermaid
-...
+docs/architecture/production/production_architecture.mmd
+docs/architecture/production/production_architecture.md
 ```
 
-Finally, reply ONLY with:
+## Required validation response
 
-- Files created
-- File paths
-- Any validation errors
+After changing a diagram, report only:
 
-Do NOT print the Mermaid diagram in chat.
+- files changed;
+- Mermaid validation result;
+- evidence status changes;
+- unresolved assumptions/approvals;
+- items that must not be shown as current.
