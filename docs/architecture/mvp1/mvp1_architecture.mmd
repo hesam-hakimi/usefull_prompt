@@ -1,61 +1,68 @@
 flowchart LR
-    user["Business Users"]
+    user["Business User<br/>Browser"]
 
-    subgraph sprucex["SpruceX / Azure Environment"]
+    subgraph sprucex["MVP1 SpruceX / Azure environment — planned"]
         direction LR
 
-        subgraph hosting["Azure App Service (ASP)"]
+        subgraph app["Azure App Service package"]
             direction TB
-            react["React SPA<br/>Static HTML / CSS / JS"]
-            api["FastAPI Backend<br/>REST API"]
-            safety["Pre-LLM Validation<br/>& Cost Guard"]
-            audit["Minimum User / Query<br/>Data-Access Audit"]
-            trace["JSON Trace<br/>& Quality Evidence"]
-            react -->|"HTTPS REST API"| api
-            api -->|"Validate Before Model Call"| safety
-            api -->|"Audit Event"| audit
-            api -.->|"Diagnostic Event"| trace
+            react["Packaged React build<br/>Static HTML / CSS / JS"]
+            api["FastAPI / Uvicorn<br/>JSON REST + SSE"]
+            runtime["Primary + fallback orchestration"]
+
+            subgraph controls["Planned MVP1 in-process controls"]
+                safety["Strengthened request safety"]
+                audit["User / query / data / export audit writer"]
+                quality["Golden + unseen evaluation<br/>Baseline reconciliation"]
+            end
+
+            react -->|"Same-origin HTTPS<br/>REST or SSE + Bearer JWT"| api
+            api --> runtime
+            api -.-> safety
+            api -.-> audit
+            runtime -.-> quality
         end
 
-        entra["Microsoft Entra ID"]
-        mi["Managed Identity"]
-        openai["Azure OpenAI"]
-        search["Azure AI Search<br/>Metadata Retrieval"]
-        sql["Azure SQL<br/>Control Plane"]
+        entra["Microsoft Entra ID / JWKS"]
+        mi["Approved workload identity<br/>Managed Identity where supported"]
+        openai["Azure OpenAI<br/>Approved model access"]
+        search["Azure AI Search<br/>Conditional metadata grounding"]
+        sql["Azure SQL<br/>Control plane + audit records"]
         dbsql["Azure Databricks<br/>SQL Warehouse"]
-        adls["ADLS Gen2<br/>Governed Data Products"]
+        adls["ADLS Gen2<br/>Governed data products"]
 
         api -->|"Uses"| mi
-        safety -->|"Approved Model Request"| openai
-        api -->|"Metadata Retrieval"| search
-        api -->|"Control / Metadata"| sql
-        audit -->|"Audit Records"| sql
-        api -->|"Governed Analytical SQL"| dbsql
-        dbsql -->|"Reads Governed Data"| adls
+        mi --> openai
+        mi --> search
+        mi --> sql
+        mi --> dbsql
 
-        mi -.->|"Authentication"| openai
-        mi -.->|"Authentication"| search
-        mi -.->|"Authentication"| sql
-        mi -.->|"Approved Workload Identity"| dbsql
+        runtime -->|"Current/control queries"| sql
+        runtime -.->|"Fallback grounding"| search
+        runtime -->|"Model calls"| openai
+        runtime -->|"Governed analytical SQL"| dbsql
+        dbsql -->|"Reads governed data"| adls
+        audit -->|"Durable MVP audit records"| sql
     end
 
-    user -->|"HTTPS"| react
-    react -.->|"Sign-in"| entra
-    entra -.->|"JWT / Application Group Claims"| api
+    user -->|"HTTPS GET / and /assets/*"| react
+    user -.->|"MSAL login / token acquisition"| entra
+    api -.->|"JWKS + issuer/audience/scope validation"| entra
 
-    classDef user fill:#e7f6eb,stroke:#008a00,stroke-width:1.5px,color:#1a1a1a;
+    classDef actor fill:#e7f6eb,stroke:#008a00,stroke-width:1.5px,color:#1a1a1a;
     classDef app fill:#eef7ee,stroke:#008a00,stroke-width:1.5px,color:#1a1a1a;
-    classDef control fill:#f3f7e8,stroke:#708b1e,stroke-width:1.5px,color:#1a1a1a;
-    classDef azure fill:#e7f0f9,stroke:#205e91,stroke-width:1.5px,color:#1a1a1a;
+    classDef control fill:#f7f7f7,stroke:#777777,stroke-width:1.2px,color:#1a1a1a;
+    classDef identity fill:#e7f0f9,stroke:#205e91,stroke-width:1.5px,color:#1a1a1a;
     classDef data fill:#fff6e0,stroke:#b77800,stroke-width:1.5px,color:#1a1a1a;
-    classDef telemetry fill:#f3eafa,stroke:#6f42a5,stroke-width:1.5px,color:#1a1a1a;
+    classDef ai fill:#eef3ff,stroke:#205e91,stroke-width:1.5px,color:#1a1a1a;
 
-    class user user;
-    class react,api app;
-    class safety control;
-    class entra,mi,openai,search azure;
+    class user actor;
+    class react,api,runtime app;
+    class safety,audit,quality control;
+    class entra,mi identity;
     class sql,dbsql,adls data;
-    class audit,trace telemetry;
+    class openai,search ai;
 
     style sprucex fill:#ffffff,stroke:#64a878,stroke-width:2px,stroke-dasharray:6 4
-    style hosting fill:#ffffff,stroke:#9ab7a7,stroke-width:1.5px,stroke-dasharray:5 4
+    style app fill:#ffffff,stroke:#9ab7a7,stroke-width:1.5px,stroke-dasharray:5 4
+    style controls fill:#ffffff,stroke:#999999,stroke-width:1.1px,stroke-dasharray:3 3
