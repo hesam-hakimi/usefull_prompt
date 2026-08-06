@@ -1,98 +1,76 @@
-INVESTIGATION ONLY — DO NOT MODIFY FILES
+Implement the next bounded hardening step for STTM inactive-reference handling.
 
-Investigate whether the STTM parser correctly treats Excel strikethrough formatting as an inactive/deprecated record marker.
+The investigation has established:
 
-Context:
-A real STTM workbook was successfully parsed with:
-- 59 active mappings
-- review findings including:
-  FM_00012 -> T_SCHM_0008
-  FM_00030 -> T_SCHM_0026
-  reported as active mappings referencing inactive schemas.
+- Excel strikethrough parsing is working correctly.
+- The parser correctly distinguishes active and inactive records.
+- The real workbook contains 64 mappings:
+  - 59 active
+  - 5 inactive
+- Active mappings FM_00012 and FM_00030 reference inactive schemas
+  T_SCHM_0008 and T_SCHM_0026.
+- STTM_REFERENCE_INACTIVE is therefore a legitimate reference-consistency finding.
 
-In the workbook, some schema/mapping/rule rows are visually struck through and are intended to represent obsolete/inactive content.
+DO NOT change the semantic rule so that an active mapping automatically becomes inactive merely because a referenced schema/rule is inactive.
+That would hide inconsistent STTM authoring.
 
-I need a deterministic answer, not an inference.
+Implement only these two changes:
 
-Inspect the STTM parser implementation and its tests.
+1. Regression-test the existing strikethrough semantics.
 
-Determine:
+Add synthetic workbook tests covering:
+- normal active mapping
+- fully struck-through mapping is inactive
+- partially struck-through non-key/history content
+- inactive schema referenced by active mapping
+- inactive mapping referencing active schema
+- inactive BR/TR referenced from active mapping
+- current active row plus struck-through historical/deleted row
+- join/filter/error records whose identifying cells are struck through
 
-1. Does the XLSX reader capture Excel font strikethrough (`font.strike`) at:
-   - cell level
-   - row/entity level
-   - schema definitions
-   - field mappings
-   - business rules
-   - transformation rules
-   - join clauses
-   - filters
-   - error definitions?
+Explicitly verify that:
+- active mapping -> inactive required reference remains an active mapping
+- STTM_REFERENCE_INACTIVE is emitted
+- the mapping is NOT silently removed from activeMappings
 
-2. Where is active/inactive status currently derived from?
+2. Strengthen generation/readiness behavior.
 
-3. Specifically trace:
-   - T_SCHM_0008
-   - T_SCHM_0026
-   - FM_00012
-   - FM_00030
+When an ACTIVE mapping depends on an INACTIVE required schema/rule/reference:
+- preserve the diagnostic STTM_REFERENCE_INACTIVE
+- classify the affected artifact path as BLOCKED for faithful generation
+- do not invent a replacement reference
+- do not silently reactivate the referenced entity
+- do not silently deactivate the active mapping
+- unaffected STTM analysis may continue
+- preview may identify the blocked artifact, but no write may occur for an artifact whose required evidence depends on that invalid reference
 
-For each one report:
-- workbook sheet
-- row
-- whether relevant cells are struck through
-- whether parser marks the record active or inactive
-- whether it contributes to `activeMappings`
-- whether it contributes to rule/reference resolution
-- why.
+Keep this generic.
+Do NOT special-case:
+FM_00012
+FM_00030
+T_SCHM_0008
+T_SCHM_0026
+CD Renewal
+or any workbook filename.
 
-4. Determine whether the parser currently:
-   A. correctly excludes struck-through obsolete records,
-   B. recognizes strike-through only in some STTM sections,
-   C. ignores strike-through entirely,
-   D. or has another explicit inactivity mechanism.
+Do not modify consumer workspace files.
 
-5. Check for the broader semantic bug:
-A struck-through record must not silently become active merely because its cell text is present.
-
-Do NOT assume all formatting is semantic.
-Determine from existing STTM behavior/tests whether strikethrough is the established deletion/inactivation convention.
-
-6. If a defect exists, identify the smallest GENERIC fix.
-The fix must not contain:
-- CD Renewal-specific IDs
-- workbook-specific filenames
-- T_SCHM_0008/T_SCHM_0026 special cases
-- FM_00012/FM_00030 special cases.
-
-7. Propose regression tests using synthetic workbooks covering:
-- active normal row
-- fully struck-through row
-- partially struck-through row
-- struck-through schema referenced by active mapping
-- struck-through mapping referencing active schema
-- struck-through BR/TR
-- current row plus struck-through historical/deleted row
-
-Do not implement yet.
+Run targeted tests and the relevant STTM/parser/reference-resolution test suite.
 
 Return:
 
-## Verdict
-PASS / DEFECT / PARTIAL SUPPORT
+## Implementation Result
 
-## Current Strikethrough Semantics
+## Semantics Preserved
 
-## Trace
-| ID | Sheet | Row | Strike | Parser State | Counted Active? | Reason |
+## New Blocking Behavior
 
-## Root Cause
-
-## Generic Fix
-
-## Required Regression Tests
-
-## Files That Would Need To Change
+## Regression Tests
 
 ## Files Changed
-None
+
+## Test Results
+
+## Compatibility / Risks
+
+## Independent Verifier Result
