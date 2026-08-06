@@ -1,29 +1,32 @@
-Acceptance Test — Version History
+Using only etl_interpret_sttm,
 
-Using only etl_interpret_sttm and etl_capabilities:
+inspect BR_0007 and TR_0007.
 
-Retrieve:
+Determine whether:
 
-- BR_0003
-- TR_0003
-- BR_0007
-- TR_0007
+1. the workbook actually contains a previous revision for these rules
 
-For each item report:
+or
 
-1. Current version
-2. Current version date
-3. Previous version
-4. Previous version date
-5. Full current text
-6. Full previous text
-7. Whether the previous text is independently retrievable (not inferred from merged cells)
+2. these rules exist only once in the workbook.
 
-Do not inspect package.json.
+Do not infer.
+
+Search the workbook directly.
+
+Return:
+
+- number of revisions found
+- row numbers
+- version numbers
+- revision dates
+
+If only one revision exists, explicitly state:
+
+"No previous revision exists in the workbook."
+
 Do not inspect source code.
-Do not inspect generated markdown.
-Use only runtime tools.
 
-PASS only if current and previous texts are independently retrieved from the workbook.
+Do not inspect generated files.
 
-Otherwise report exactly which field cannot be retrieved.
+Use only workbook evidence.
