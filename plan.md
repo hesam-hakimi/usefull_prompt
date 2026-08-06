@@ -1,66 +1,123 @@
-Start Phase 2B using a controlled stacked-development workflow.
+Perform an independent, read-only verification of Phase 2B and Draft PR #12.
 
-Important context:
-- PR #10 is still awaiting external approval and has not been merged.
-- Phase 2A is complete in branch phase2/registry-contracts and Draft PR #11.
-- We do not want development blocked while PR #10 is under review.
-- Phase 2B must remain dependent on Phase 2A and must not be merged or deployed yet.
+You are not the implementation agent.
 
-First, perform a read-only verification:
+Do not modify files, commit, push, rebase, merge, retarget, deploy, or begin Phase 2C.
 
-1. Fetch origin.
-2. Confirm origin/phase2/registry-contracts exists.
-3. Confirm its HEAD matches the current remote head used by PR #11.
-4. Confirm PR #11 is OPEN and Draft.
-5. Confirm the Phase 2A worktree is clean.
-6. Read the approved Phase 2 implementation plan and identify the exact Phase 2B scope, acceptance criteria, exclusions, dependencies, and expected files.
+Repositories and PR chain:
+- PR #10: phase1/foundation-contracts
+- PR #11: phase2/registry-contracts
+- PR #12: phase2/service-version-boundary
+- PR #12 must remain Draft and stacked on PR #11.
 
-Then create Phase 2B safely:
+1. Establish the authoritative Phase 2B contract
 
-- Create a new isolated worktree.
-- Create branch:
-  phase2/service-version-boundary
-- Base it exactly on origin/phase2/registry-contracts.
-- Do not use or modify the dirty asktd_v2 main checkout.
-- Do not modify, rebase, force-push, or merge:
-  - phase1/foundation-contracts
-  - phase2/registry-contracts
-  - PR #10
-  - PR #11
+Locate and read every authoritative implementation-plan artifact in the repository, including:
+- the Phase 2 implementation plan;
+- plan_impl.md and its Milestone 1 requirements;
+- PR #11’s documented deferred Phase 2B scope;
+- any architecture, ADR, acceptance-criteria, or roadmap section defining:
+  - registry service boundary;
+  - versioned snapshots;
+  - registry version;
+  - version lookup;
+  - lifecycle behavior.
 
-Implement only the approved Phase 2B scope.
+Report the exact file paths and headings used as evidence.
 
-Required safeguards:
+Do not infer Phase 2B only from the branch name.
 
-- Preserve all Phase 2A public API and compatibility guarantees.
-- Do not expose the governed internal registry snapshot through public APIs.
-- Do not grant authorization through metadata.
-- Do not begin Phase 2C or any later phase.
-- Do not add deployment, publish, SQL-backed storage, recipe migration, KPI/glossary, output-template, or runtime-routing work unless explicitly included in Phase 2B.
-- Do not invent requirements where the plan is ambiguous.
-- Record ambiguous requirements as blockers rather than guessing.
-- Add focused contract tests and regression coverage.
-- Run the focused Phase 2B tests, related suites, full backend suite, coverage gate, golden-baseline tests, secret scan, and git diff hygiene checks.
+2. Determine implementation completeness
 
-After implementation:
+Compare the authoritative requirements against PR #12.
 
-1. Commit and push only to phase2/service-version-boundary.
-2. Open a Draft stacked PR with:
-   - base: phase2/registry-contracts
-   - head: phase2/service-version-boundary
-3. State clearly in the PR body:
-   - BLOCKED BY PR #11
-   - TRANSITIVELY BLOCKED BY PR #10
-   - MUST NOT BE MERGED OR DEPLOYED until the parent PR chain is finalized
-4. Do not mark the PR ready for review unless explicitly requested.
+Explicitly determine whether Phase 2B requires only:
+- a safe current-snapshot version descriptor and internal service accessor;
+
+or also requires any of:
+- persisted or retained snapshot versions;
+- historical version lookup;
+- lookup by registry_version;
+- immutable snapshot retrieval;
+- version comparison;
+- version lifecycle rules;
+- service-level errors for unknown versions;
+- public or internal API exposure.
+
+Classify PR #12 as:
+- COMPLETE;
+- PARTIAL;
+- OUT OF SCOPE;
+- BLOCKED BY AMBIGUOUS REQUIREMENTS.
+
+Do not treat assumptions labelled “likely” as approved requirements.
+
+3. Review the version contract
+
+Inspect:
+- RegistryVersionDescriptor;
+- build_version_descriptor(...);
+- MetadataRegistryService.version_descriptor(...);
+- all new and modified tests.
+
+Verify:
+
+- Pydantic strictness and immutability are correct.
+- Only safe identity fields are exposed.
+- Governed records and raw metadata cannot leak.
+- Metadata cannot grant authorization.
+- Strict-on and strict-off behavior are explicitly defined.
+- Returning a null-identity descriptor in strict-off mode is intentional and not misleading.
+- schema_version, registry_version, lifecycle_status, source, and strict_mode have clear semantics.
+- content_hash is stable across processes and checkouts.
+- Semantically equivalent snapshots with different input-record ordering produce the intended hash behavior.
+- The hash does not accidentally depend on unstable ordering, paths, timestamps, runtime-only values, or serialization implementation details.
+- Lifecycle or version changes affect the descriptor only when intended.
+- No circular or self-referential version calculation exists.
+
+4. Reconcile the changed-file inventory
+
+Use Git and GitHub PR data to report the exact diff from:
+
+origin/phase2/registry-contracts
+to
+origin/phase2/service-version-boundary
+
+Reconcile why the implementation report says 5 changed files while the editor summary shows 4 files changed.
+
+Report for every file:
+- added, modified, deleted, or renamed;
+- additions and deletions;
+- whether it belongs to Phase 2B.
+
+Confirm no existing general API test was accidentally removed or renamed without preserving its coverage.
+
+5. Verification
+
+Run, without modifying source files:
+
+- focused Phase 2B tests;
+- Phase 2A registry contract tests;
+- metadata registry service tests;
+- API compatibility tests;
+- full backend test suite;
+- coverage gate;
+- golden-baseline tests;
+- git diff --check;
+- tracked-file secret/credential scan using the repository’s approved mechanism, if one exists.
+
+Do not install or silently substitute security tools. State clearly if only a pattern-based scan is available.
+
+6. Return
 
 Return:
 
-1. Verified starting branch and SHA
-2. Exact Phase 2B scope implemented
-3. Files changed
-4. Tests and coverage results
-5. Draft PR number and URL
-6. Any assumptions or blockers
-7. Required rebase sequence after PR #10 is merged
-8. Confirmation that no parent branch, unrelated checkout, secret, deployment file, or later-phase scope was modified
+1. Overall verdict: PASS, PASS WITH CONDITIONS, PARTIAL, or FAIL.
+2. Authoritative Phase 2B requirements.
+3. Requirement-to-code traceability table.
+4. Missing, excess, or ambiguous implementation.
+5. Exact PR #12 file inventory.
+6. Hash and strict-off contract findings.
+7. Test and coverage results.
+8. Required corrective actions before Phase 2C.
+9. Confirmation that no files or branches were changed during this audit.
