@@ -1,127 +1,98 @@
-STRICT READ-ONLY STTM PARSER ACCEPTANCE TEST
+INVESTIGATION ONLY — DO NOT MODIFY FILES
 
-This is NOT a job-creation, solution-design, framework-fit, artifact-readiness, onboarding, deployment, or implementation request.
+Investigate whether the STTM parser correctly treats Excel strikethrough formatting as an inactive/deprecated record marker.
 
-The only purpose of this test is to prove that the installed Databricks ETL Copilot can generically read and interpret a NEW STTM workbook without relying on prior CD-Renewal-specific knowledge.
+Context:
+A real STTM workbook was successfully parsed with:
+- 59 active mappings
+- review findings including:
+  FM_00012 -> T_SCHM_0008
+  FM_00030 -> T_SCHM_0026
+  reported as active mappings referencing inactive schemas.
 
-Authoritative input:
-sttm/CD-Renewal_DataMapping_V3.0 1.xlsx
+In the workbook, some schema/mapping/rule rows are visually struck through and are intended to represent obsolete/inactive content.
 
-Use ONLY the installed product ETL tools needed for this test:
-1. etl_capabilities
-2. etl_interpret_sttm
+I need a deterministic answer, not an inference.
 
-Do NOT:
-- inspect job_conf, env_conf, sql, job_onboarding, deployment files, or repository implementation artifacts
-- call etl_get_framework_rules
-- call etl_search_examples
-- call etl_inspect_existing_job
-- inspect existing jobs
-- analyze environment reuse
-- decide CREATE vs UPDATE
-- choose writer/output strategies
-- design transformation SQL
-- create a solution plan
-- determine deploy/run readiness
-- investigate onboarding
-- inspect companion repositories
-- use Jira, Confluence, ADF, Databricks runtime, or SQL Server tools
-- resolve business conflicts
-- ask me how conflicts should be resolved
-- infer missing mappings or infrastructure values
-- create, modify, preview, validate, or write any artifact
+Inspect the STTM parser implementation and its tests.
 
-First call etl_capabilities and report:
-- extension id
-- active version
-- target classification
-- runtimeReady
-- available
-- blockers
-- registered ETL tool count
+Determine:
 
-Then call etl_interpret_sttm against EXACTLY the workbook path above.
+1. Does the XLSX reader capture Excel font strikethrough (`font.strike`) at:
+   - cell level
+   - row/entity level
+   - schema definitions
+   - field mappings
+   - business rules
+   - transformation rules
+   - join clauses
+   - filters
+   - error definitions?
 
-Validate only the parser behavior and report:
+2. Where is active/inactive status currently derived from?
 
-A. Workbook identity
-- resolved workspace-relative path
-- detected workbook version
-- latest revision date
-- recognized sheets
-- active mapping count
-- rule count
-- parser confidence/diagnostics if returned
+3. Specifically trace:
+   - T_SCHM_0008
+   - T_SCHM_0026
+   - FM_00012
+   - FM_00030
 
-B. V3 change discovery
-Determine from this workbook itself whether the latest revision introduces:
-- mfastatus
-- transferamount
-- transferfrom
-- transferto
-- transferstatus
-- cdclosuresuccessful
+For each one report:
+- workbook sheet
+- row
+- whether relevant cells are struck through
+- whether parser marks the record active or inactive
+- whether it contributes to `activeMappings`
+- whether it contributes to rule/reference resolution
+- why.
 
-For each field, report only evidence available from the STTM:
-- target field
-- source/business-rule evidence
-- transformation-rule ID
-- complete transformation rule text when available
+4. Determine whether the parser currently:
+   A. correctly excludes struck-through obsolete records,
+   B. recognizes strike-through only in some STTM sections,
+   C. ignores strike-through entirely,
+   D. or has another explicit inactivity mechanism.
 
-C. Targeted rule retrieval
-Retrieve and report the complete, untruncated definitions for:
-- TR_0035
-- TR_0041
+5. Check for the broader semantic bug:
+A struck-through record must not silently become active merely because its cell text is present.
 
-D. Generic parser behavior
-State explicitly whether all conclusions above came from THIS workbook through etl_interpret_sttm rather than:
-- another STTM workbook
-- repo examples
-- generated CD-Renewal knowledge
-- previous chat memory
-- manually pasted workbook content
+Do NOT assume all formatting is semantic.
+Determine from existing STTM behavior/tests whether strikethrough is the established deletion/inactivation convention.
 
-E. Problems found in the workbook
-You MAY identify inconsistencies visible directly in the STTM, such as conflicting revisions or rule references.
-Report them as observations only.
-DO NOT resolve them and DO NOT turn them into implementation questions.
+6. If a defect exists, identify the smallest GENERIC fix.
+The fix must not contain:
+- CD Renewal-specific IDs
+- workbook-specific filenames
+- T_SCHM_0008/T_SCHM_0026 special cases
+- FM_00012/FM_00030 special cases.
 
-Stop immediately after this report.
+7. Propose regression tests using synthetic workbooks covering:
+- active normal row
+- fully struck-through row
+- partially struck-through row
+- struck-through schema referenced by active mapping
+- struck-through mapping referencing active schema
+- struck-through BR/TR
+- current row plus struck-through historical/deleted row
 
-Required final format:
+Do not implement yet.
 
-## Test Status
-PASS / PARTIAL / FAIL
+Return:
 
-## Runtime
-...
+## Verdict
+PASS / DEFECT / PARTIAL SUPPORT
 
-## Workbook Parsed
-...
+## Current Strikethrough Semantics
 
-## V3 Fields
-| Field | Mapping Evidence | BR | TR | Complete Rule Retrieved |
-...
+## Trace
+| ID | Sheet | Row | Strike | Parser State | Counted Active? | Reason |
 
-## Targeted Rules
-### TR_0035
-...
-### TR_0041
-...
+## Root Cause
 
-## Workbook Observations
-...
+## Generic Fix
 
-## Generic-Behavior Verdict
-PASS/FAIL with one short explanation.
+## Required Regression Tests
 
-## Files Written
+## Files That Would Need To Change
+
+## Files Changed
 None
-
-A PASS means:
-- etl_capabilities is callable automatically
-- the exact supplied workbook is parsed
-- V3 changes are discovered from that workbook
-- TR_0035 and TR_0041 can be retrieved without truncation
-- no other workbook/example/repository implementation is used as a substitute
-- no artifacts are created or modified
