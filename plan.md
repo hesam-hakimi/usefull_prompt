@@ -1,302 +1,283 @@
-Complete and harden Phase 2B in the existing stacked branch and Draft PR.
+Perform the final independent, read-only acceptance audit of Phase 2B and Draft PR #12.
 
-This instruction is the product-owner scope decision for Phase 2B. Record it in an authoritative repository artifact before changing implementation.
+You are an independent reviewer. You did not implement Phase 2B.
 
-Current chain:
+Do not modify any file.
+Do not commit, push, rebase, merge, retarget, deploy, change PR metadata, or begin Phase 2C.
+
+Current stacked chain:
+
 - PR #10: phase1/foundation-contracts
 - PR #11: phase2/registry-contracts
 - PR #12: phase2/service-version-boundary
 - PR #12 must remain Draft and based on phase2/registry-contracts.
 
-Use only the existing isolated Phase 2B worktree.
-
-Do not use or modify the dirty asktd_v2 checkout.
-Do not modify, rebase, merge, force-push, retarget, or close PR #10 or PR #11.
-Do not begin Phase 2C.
-Do not deploy anything.
+Use the clean isolated Phase 2B worktree.
+Do not use or alter the dirty asktd_v2 checkout.
 
 ────────────────────────────────────
-1. Ratified Phase 2B scope
+1. Verify the authoritative contract
 ────────────────────────────────────
 
-Phase 2B is the internal metadata-registry service and version boundary.
+Read:
 
-Phase 2B MUST include:
+- docs/adr/0001-phase2b-registry-service-version-boundary.md
+- docs/adr/README.md
+- the Phase 2 implementation plans and Milestone 1 requirements
+- the Phase 2A registry contracts
+- PR #12’s current body
 
-1. MetadataRegistryService as the internal owner of governed RegistrySnapshot loading and retrieval.
+Confirm that ADR 0001:
 
-2. A safe current-version descriptor that exposes only approved identity information:
-   - schema_version
-   - registry_version
-   - lifecycle_status
-   - source, only if its semantics are clearly defined
-   - no governed records, paths, payloads, authorization data, or secrets
+- follows the repository ADR convention;
+- is marked Accepted;
+- clearly defines included and excluded Phase 2B scope;
+- defines registry_version as the authoritative governed-snapshot identifier;
+- distinguishes legacy metadata()["version"] from governed registry_version;
+- defines strict-on and strict-off behavior;
+- documents cache TTL, capacity, retention, invalidation and metrics semantics;
+- does not silently move Phase 2C–2G work into Phase 2B.
 
-3. A bounded, thread-safe, in-process cache for governed snapshots:
-   - configurable TTL
-   - configurable maximum retained versions
-   - deterministic eviction
-   - monotonic clock for expiration
-   - injectable clock for tests
-   - no external cache dependency
-
-4. Immutable versioned snapshot retention:
-   - snapshots keyed by registry_version
-   - current snapshot retrieval
-   - historical retained-snapshot retrieval by registry_version
-   - cached snapshots must not be mutable by callers
-   - attempting to register conflicting content under the same registry_version must fail safely
-
-5. Explicit internal invalidation:
-   - invalidate one registry_version
-   - invalidate all retained versions
-   - no HTTP endpoint
-   - no publish workflow integration in this phase
-   - the hook must be ready for a later publish workflow
-
-6. Safe version lookup behavior:
-   - lookup by registry_version
-   - a typed safe error for unknown or expired versions
-   - errors must contain only safe codes and version identifiers
-   - no raw metadata, paths, payloads, or secrets in errors
-
-7. Internal cache observability:
-   - cache hits
-   - cache misses
-   - loads
-   - evictions
-   - invalidations
-   - current retained-version count
-   - expose metrics only through an internal service accessor
-
-Phase 2B explicitly EXCLUDES:
-
-- public HTTP endpoints
-- public API shape changes
-- persistent or SQL-backed snapshot storage
-- Redis or distributed caching
-- runtime routing
-- semantic-plan validation
-- recipe migration
-- KPI or glossary behavior
-- output templates
-- publish/approval workflow
-- deployment
-- version comparison
-- rollback
-- admin APIs
-- Phase 2C through Phase 2G behavior
-
-Version comparison and rollback remain later Milestone 7 work.
+Report any contradiction between the ADR, implementation plans, code or PR body.
 
 ────────────────────────────────────
-2. Authoritative scope document
+2. Verify the exact PR diff
 ────────────────────────────────────
 
-Inspect the repository documentation conventions.
-
-If an ADR convention exists, create the next correctly numbered ADR.
-Otherwise create:
-
-docs/plans/phase2b-registry-service-version-boundary.md
-
-The document must state:
-
-- the exact included and excluded scope above;
-- why Phase 2B is internal-only;
-- snapshot version and cache semantics;
-- strict-on and strict-off behavior;
-- registry_version semantics;
-- the relationship between legacy metadata()["version"] and governed registry_version;
-- invalidation and retention behavior;
-- deferred responsibilities and their future phases;
-- acceptance criteria.
-
-Do not modify unrelated planning documents.
-
-────────────────────────────────────
-3. Correct the version descriptor contract
-────────────────────────────────────
-
-Review the current RegistryVersionDescriptor implementation.
-
-Remove content_hash from the Phase 2B contract unless an existing pre-PR-12 consumer requires it.
-
-Reason:
-- content_hash was introduced by PR #12;
-- it is not required by an authoritative plan;
-- its semantics are currently order-sensitive and tied to Pydantic serialization;
-- registry_version is the authoritative lookup identity for Phase 2B.
-
-Do not introduce a replacement public hash field.
-
-If an internal fingerprint is necessary only to detect conflicting snapshots under the same registry_version, keep it private to the service and do not expose it through descriptors or APIs.
-
-Document registry_version as the authoritative governed-snapshot identifier.
-
-────────────────────────────────────
-4. Resolve strict-off semantics
-────────────────────────────────────
-
-Preserve all Phase 2A legacy and public API behavior.
-
-The governed registry boundary exists only when strict governed metadata is enabled.
-
-Required behavior:
-
-- strict mode enabled:
-  - governed snapshot accessors operate normally;
-  - version descriptor is available;
-  - version lookup and cache behavior are available.
-
-- strict mode disabled:
-  - governed snapshot accessor returns None using the existing Phase 2A compatibility behavior;
-  - version_descriptor() returns None, not a descriptor populated with null fields;
-  - governed version lookup must not fabricate a version;
-  - legacy metadata APIs remain unchanged.
-
-Explicitly document that:
-
-- metadata()["version"] is a legacy runtime/file metadata value;
-- RegistrySnapshot.registry_version is the governed registry version;
-- they are intentionally different contracts;
-- consumers must not compare or substitute one for the other.
-
-Update typing accordingly, such as:
-
-RegistryVersionDescriptor | None
-
-Do not expose the governed snapshot through /api/questions, /api/registry, /api/roles, or any new endpoint.
-
-────────────────────────────────────
-5. Cache and snapshot behavior
-────────────────────────────────────
-
-Before implementation, inspect existing configuration and dependency-injection patterns.
-
-Reuse existing patterns where available.
-
-Do not add new third-party dependencies solely for the cache.
-
-The implementation should use standard-library facilities where appropriate and must be:
-
-- thread-safe;
-- bounded;
-- deterministic;
-- testable;
-- independent of wall-clock changes;
-- compatible with the existing application lifecycle.
-
-Use constructor-injected cache policy and clock.
-
-If repository configuration already defines suitable TTL and size values, use it.
-
-If no approved product values exist:
-- keep TTL and maximum versions injectable;
-- choose conservative internal defaults;
-- document them explicitly as Phase 2B defaults;
-- do not present them as permanent production sizing decisions.
-
-Ensure that callers cannot mutate a retained snapshot and thereby alter future reads.
-
-Add a safe typed exception hierarchy where needed, including an unknown-version error and a conflicting-version error.
-
-────────────────────────────────────
-6. Tests required
-────────────────────────────────────
-
-Add focused tests for:
-
-- current governed snapshot retrieval;
-- lookup by registry_version;
-- retrieval of a previously retained version;
-- unknown version;
-- expired version;
-- single-version invalidation;
-- invalidate-all;
-- TTL expiration using an injected clock;
-- maximum-capacity eviction;
-- deterministic eviction order;
-- cache hit and miss counters;
-- load, eviction, and invalidation metrics;
-- duplicate registration of identical version/content;
-- conflicting content under the same registry_version;
-- caller mutation cannot modify the retained snapshot;
-- strict-on descriptor behavior;
-- strict-off returns None;
-- legacy metadata()["version"] remains unchanged;
-- no governed metadata leak through public APIs;
-- no metadata-based authorization fields;
-- errors do not leak paths, payloads, secrets, or governed content;
-- concurrent reads do not corrupt cache state.
-
-Preserve all existing Phase 2A contract and API compatibility tests.
-
-Do not rename or remove existing tests merely to satisfy coverage.
-
-────────────────────────────────────
-7. Verification gates
-────────────────────────────────────
-
-Run:
-
-1. focused Phase 2B tests;
-2. Phase 2A registry-contract tests;
-3. metadata-registry service tests;
-4. API route and serialization compatibility tests;
-5. full backend test suite;
-6. coverage gate;
-7. golden-baseline tests;
-8. git diff --check;
-9. repository-approved secret scanner, if available;
-10. pattern-based tracked-file scan only as a clearly labelled fallback.
-
-Report skipped tests and confirm whether each skip is pre-existing.
-
-Reconcile the exact changed-file inventory against:
+Fetch origin and compare exactly:
 
 origin/phase2/registry-contracts
 to
-phase2/service-version-boundary
+origin/phase2/service-version-boundary
+
+Confirm:
+
+- the remote PR head matches the reported Phase 2B commit;
+- exactly nine intended files are changed;
+- additions and deletions match the committed Git diff;
+- every changed file belongs to Phase 2B;
+- no public API, deployment, workflow, dependency, secret, parent-branch or unrelated documentation file was changed.
+
+Return the exact file inventory with:
+
+- path
+- added/modified/deleted
+- additions/deletions
+- purpose
+- in-scope verdict
 
 ────────────────────────────────────
-8. Commit and PR handling
+3. RegistrySnapshotCache correctness
 ────────────────────────────────────
 
-After all gates pass:
+Review RegistrySnapshotCache and its tests.
 
-- commit only to phase2/service-version-boundary;
-- push normally without force;
-- keep PR #12 Draft;
-- keep its base as phase2/registry-contracts;
-- update the PR body with:
-  - ratified Phase 2B scope;
-  - implementation summary;
-  - strict-off semantics;
-  - cache and version-retention contract;
-  - test results;
-  - explicit exclusions;
-  - BLOCKED BY PR #11;
-  - TRANSITIVELY BLOCKED BY PR #10;
-  - MUST NOT BE MERGED OR DEPLOYED.
+Verify:
 
-Do not mark ready for review.
-Do not start Phase 2C.
+- only standard-library dependencies are used;
+- locking protects every shared mutable state operation;
+- the injected clock is used consistently;
+- expiration uses a monotonic clock rather than wall-clock time;
+- configured TTL and maximum retained-version values are validated safely;
+- the cache can never become accidentally unbounded;
+- FIFO eviction is deterministic and documented;
+- capacity eviction and TTL expiration have distinct, intentional semantics;
+- expired entries are removed safely;
+- the current-version pointer cannot reference an expired, invalidated or evicted snapshot;
+- invalidating the current version leaves the service in a documented safe state;
+- invalidate_all clears all associated state;
+- duplicate registration of identical version/content is idempotent;
+- duplicate registration does not unintentionally refresh TTL or reorder FIFO unless explicitly documented;
+- conflicting content under the same registry_version raises the typed safe error;
+- no lock ordering or re-entrant deadlock risk exists;
+- concurrent reads, registrations, expiry and invalidation cannot corrupt state.
+
+Pay particular attention to edge cases:
+
+- max retained versions = 1;
+- invalid or zero maximum capacity;
+- TTL disabled or zero, if supported;
+- exact TTL boundary;
+- simultaneous expiry and lookup;
+- current snapshot evicted by capacity;
+- invalidation followed by registration of the same version;
+- multiple threads requesting the same version.
 
 ────────────────────────────────────
-9. Final response
+4. Snapshot immutability and identity
 ────────────────────────────────────
 
-Return:
+Verify that retained RegistrySnapshot objects are genuinely protected from caller mutation.
 
-1. Overall PASS, PASS WITH CONDITIONS, PARTIAL, or FAIL
-2. Authoritative scope document path
-3. Exact requirements implemented
-4. Exact files changed
-5. Version and strict-off semantics
-6. Cache policy and defaults
-7. Version lookup and invalidation behavior
-8. Tests, skips, and coverage
-9. PR #12 state, base, head, commit SHA, and URL
-10. Remaining blockers
-11. Confirmation that parent branches, unrelated checkout, public APIs, deployment files, secrets, and Phase 2C+ scope were not modified
+Confirm:
+
+- snapshots are copied before retention where required;
+- reads return deep copies;
+- nested lists, dictionaries and nested models cannot mutate the retained copy;
+- mutation of the original object after registration cannot change the cached snapshot;
+- mutation of a returned object cannot affect a later lookup;
+- current and historical retrieval follow the same protection contract.
+
+Inspect the private mechanism used to determine whether two snapshots under the same registry_version are identical.
+
+Confirm:
+
+- it does not expose content_hash publicly;
+- it contains no paths, secrets or runtime-only fields;
+- it behaves consistently across processes;
+- record ordering semantics are intentional and documented;
+- semantically equivalent snapshots are not incorrectly treated as conflicts merely because of unstable serialization or collection order;
+- different governed content under the same registry_version is always rejected.
+
+Report whether the conflict check is:
+
+- canonical semantic identity;
+- deterministic serialized identity;
+- ordinary model equality;
+- another mechanism.
+
+State whether that mechanism matches ADR 0001.
+
+────────────────────────────────────
+5. Strict-mode and version semantics
+────────────────────────────────────
+
+Verify:
+
+Strict enabled:
+
+- governed_snapshot is available;
+- version_descriptor() returns the frozen four-field descriptor;
+- current and historical lookups work;
+- cache, invalidation and metrics accessors work.
+
+Strict disabled:
+
+- governed_snapshot is None;
+- version_descriptor() is None;
+- governed version lookup cannot fabricate or expose a version;
+- legacy metadata APIs remain byte/shape compatible;
+- metadata()["version"] remains the legacy runtime/file value;
+- no consumer can accidentally substitute it for RegistrySnapshot.registry_version.
+
+Confirm source semantics are safe and documented and that the descriptor contains only:
+
+- schema_version
+- registry_version
+- lifecycle_status
+- source
+
+Confirm it contains no records, owner details, provenance payloads, paths, permissions, authorization data or secrets.
+
+────────────────────────────────────
+6. Error and observability contracts
+────────────────────────────────────
+
+Inspect:
+
+- UnknownRegistryVersionError
+- ExpiredRegistryVersionError
+- ConflictingRegistryVersionError
+- cache metrics model and accessor
+
+Verify:
+
+- error messages and dictionaries contain only the approved error code and registry_version;
+- no raw snapshot, metadata record, file path, payload, exception chain or secret is exposed;
+- unknown and expired versions are distinguishable;
+- repeated lookup after expiration has documented behavior;
+- metrics are immutable snapshots rather than live mutable internal state;
+- metrics updates are thread-safe;
+- hits, misses, loads, evictions, invalidations and retained_versions have precise semantics;
+- retained_versions always reflects actual cache contents;
+- TTL removal and capacity eviction counters behave as documented;
+- invalidation metrics distinguish operation calls from entries actually removed, or clearly document the chosen meaning.
+
+────────────────────────────────────
+7. Public API and authorization boundary
+────────────────────────────────────
+
+Verify that:
+
+- no new HTTP endpoint was added;
+- api.py is unchanged;
+- /api/questions remains unchanged;
+- /api/registry remains unchanged;
+- /api/roles remains unchanged;
+- metadata() remains unchanged;
+- no RegistrySnapshot or RegistryVersionDescriptor leaks through serialization;
+- metadata cannot grant permissions or authorization;
+- no fields such as permissions, grants, authorized, allow or access were introduced into governed contracts.
+
+────────────────────────────────────
+8. Independent test execution
+────────────────────────────────────
+
+Run without modifying source files:
+
+1. all focused cache tests;
+2. all service-version-boundary tests;
+3. Phase 2A registry-contract tests;
+4. metadata-registry service tests;
+5. API route and serialization compatibility suites;
+6. concurrency tests repeatedly enough to expose obvious race conditions;
+7. full backend suite;
+8. coverage gate;
+9. golden-baseline tests;
+10. git diff --check;
+11. repository-approved local secret scanner, if one exists;
+12. otherwise a clearly labelled pattern-based tracked-file fallback scan.
+
+Report:
+
+- exact test commands;
+- passed, failed and skipped counts;
+- whether every skip is pre-existing;
+- total coverage;
+- coverage for registry_cache.py, registry_contract.py and metadata_registry.py;
+- whether running tests left tracked files modified.
+
+Do not install an unapproved security scanner.
+
+────────────────────────────────────
+9. Git and PR hygiene
+────────────────────────────────────
+
+Confirm:
+
+- Phase 2B worktree is clean after testing;
+- PR #12 is OPEN and Draft;
+- base is phase2/registry-contracts;
+- head is phase2/service-version-boundary;
+- PR body contains the blocked-by and do-not-merge/deploy notices;
+- PR #10 and PR #11 remain unchanged;
+- no force push occurred;
+- no secret, environment file or credential is tracked;
+- the dirty asktd_v2 checkout was never modified;
+- Phase 2C was not started.
+
+────────────────────────────────────
+10. Final verdict
+────────────────────────────────────
+
+Return exactly:
+
+1. Overall verdict:
+   - PASS
+   - PASS WITH CONDITIONS
+   - PARTIAL
+   - FAIL
+
+2. Authoritative-contract verdict
+3. Exact changed-file inventory
+4. Cache and concurrency findings
+5. Snapshot immutability and conflict-identity findings
+6. Strict-off and version-semantics findings
+7. Error and metrics findings
+8. Public-API/security-boundary findings
+9. Test, skip and coverage results
+10. PR #12 state, base, head and SHA
+11. Required corrective actions before Phase 2C
+12. Confirmation that this audit changed no files, branches, PRs or settings
+
+Do not approve Phase 2C unless the final verdict is PASS.
