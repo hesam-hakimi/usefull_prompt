@@ -1,234 +1,220 @@
-Perform the final independent acceptance audit of the remediated Phase 2B implementation and Draft PR #12.
+Prepare the authoritative implementation contract for Phase 2C.
 
-You are an independent reviewer and did not implement or remediate Phase 2B.
+This is a read-only planning task. Do not modify files, create branches,
+create worktrees, commit, push, change PR metadata, merge, deploy, or begin
+implementation.
 
-Use the existing isolated Phase 2B worktree.
+Current state:
 
-Do not modify files.
-Do not commit, push, rebase, merge, retarget, mark ready, deploy, change PR metadata, or start Phase 2C.
+- PR #10 has already been merged.
+- PR #11:
+  - branch: phase2/registry-contracts
+  - remains the parent of Phase 2B.
+- PR #12:
+  - state: OPEN and Draft
+  - base: phase2/registry-contracts
+  - head: phase2/service-version-boundary
+  - final independent acceptance verdict: PASS
+  - Phase 2B is technically complete.
+- Phase 2C is approved to begin as controlled stacked development.
+- PR #11 and PR #12 must not be merged or deployed yet.
+
 Do not use or modify the dirty asktd_v2 checkout.
 
-Current expected state:
-- PR #12: OPEN and Draft
-- Base: phase2/registry-contracts
-- Head: phase2/service-version-boundary
-- Reported final head prefix: 5f79d49
-- Remediation report: PASS
-- Reported full suite: 786 passed, 3 skipped
-- Reported coverage: 86.28%
-
 ────────────────────────────────────
-1. Verify current Git and PR state
+1. Verify the starting state
 ────────────────────────────────────
 
-Fetch origin and independently confirm:
+Fetch origin and confirm:
 
-- exact origin/main SHA;
-- exact origin/phase2/registry-contracts SHA;
-- exact origin/phase2/service-version-boundary SHA;
-- exact PR #12 head SHA;
+- origin/phase2/registry-contracts exists;
+- origin/phase2/service-version-boundary exists;
+- phase2/registry-contracts is an ancestor of
+  phase2/service-version-boundary;
 - PR #12 is OPEN and Draft;
-- base is phase2/registry-contracts;
-- head is phase2/service-version-boundary;
-- PR body still contains blocked-by and do-not-merge/deploy notices.
+- PR #12 base and head are correct;
+- the Phase 2B remote head matches the final accepted commit;
+- the isolated Phase 2B worktree is clean.
 
-Do not trust SHAs from the remediation report without verifying them.
-
-────────────────────────────────────
-2. Verify stacked ancestry
-────────────────────────────────────
-
-The remediation report states that the live Phase 2B branch had previously
-been aligned or rebased onto an updated main containing merged parent work.
-
-Determine the exact ancestry using Git merge-base and ancestor checks.
-
-Confirm:
-
-- origin/phase2/registry-contracts is an ancestor of
-  origin/phase2/service-version-boundary;
-- PR #12 contains only Phase 2B changes relative to its current base;
-- no Phase 0, Phase 1, unrelated main, or duplicate parent commits appear
-  as Phase 2B-owned PR changes;
-- the stacked relationship #10 → #11 → #12 remains logically correct;
-- no parent branch was accidentally rewritten or bypassed.
-
-Return a concise commit graph showing:
-
-main
-→ phase1/foundation-contracts
-→ phase2/registry-contracts
-→ phase2/service-version-boundary
-
-Mark any merged or obsolete branch explicitly.
-
-If ancestry is incorrect, return FAIL and do not repair it.
+Do not change anything.
 
 ────────────────────────────────────
-3. Reconcile all file counts
+2. Locate authoritative Phase 2C requirements
 ────────────────────────────────────
 
-The remediation report says exactly 6 files were changed, while the editor
-summary displayed 7 files changed.
+Search all repository planning and architecture artifacts, including:
 
-Reconcile separately:
+- docs/plans/plan_impl.md
+- docs/plans/plan_imp.md, if present
+- docs/plans/MASTER_PLAN_V1.md
+- docs/plans/PRODUCT_ORDER_AND_BACKLOG.md
+- ADRs and ADR index
+- Phase 2 validation plan
+- Phase 2B ADR
+- PR #11 and PR #12 deferred-scope descriptions
+- relevant models, registry contracts and service boundaries
 
-A. Remediation-only diff:
-   <verified pre-remediation remote head>
-   to
-   origin/phase2/service-version-boundary
+Locate every requirement related to:
 
-B. Full PR #12 diff:
-   origin/phase2/registry-contracts
-   to
-   origin/phase2/service-version-boundary
+- Phase 2C;
+- semantic-plan contract;
+- semantic-plan validation;
+- deterministic validation;
+- metadata references used by a semantic plan;
+- safe error contracts;
+- authorization boundaries;
+- SQL-safety boundaries;
+- plan lifecycle or version compatibility;
+- public versus internal API exposure.
 
-For each comparison report:
+Provide exact file paths, headings and line references where possible.
 
-- exact paths;
-- added, modified, deleted, or renamed;
-- additions and deletions;
-- purpose;
-- whether the file belongs to Phase 2B.
-
-Explain precisely why the UI displayed 7 files if the remediation commit
-changed 6.
-
-Confirm no untracked or uncommitted file accounts for the difference.
-
-────────────────────────────────────
-4. Verify every prior audit correction
-────────────────────────────────────
-
-Independently inspect code and tests and verify:
-
-A. True FIFO:
-- reads never reorder entries;
-- current, historical and metrics reads never call move_to_end;
-- capacity removes the oldest first registration;
-- read A repeatedly, then add C at capacity: A is evicted, not B.
-
-B. Duplicate registration:
-- identical version/content does not refresh TTL;
-- does not change FIFO position;
-- does not alter metrics;
-- does not replace the retained object;
-- returns a protected deep copy.
-
-C. Policy validation:
-- ttl_seconds >= 0;
-- max_versions >= 1;
-- validation applies to direct construction and environment loading;
-- invalid values fail immediately;
-- ttl_seconds = 0 disables expiration.
-
-D. TTL:
-- immediately before boundary is valid;
-- exact boundary is expired;
-- after boundary is expired;
-- monotonic injected clock is used consistently.
-
-E. Canonical identity:
-- private only;
-- not exported through __all__;
-- not present in descriptors, APIs, errors or metrics;
-- all governed semantic fields are covered;
-- runtime-only provenance.imported_at is excluded only as documented;
-- every sortable collection uses an authoritative stable ID;
-- reordered equivalent records are identical;
-- changed semantic content conflicts;
-- no collision or omitted-field risk is evident.
-
-F. Strict-off:
-- governed_snapshot() returns None;
-- version_descriptor() returns None;
-- register_snapshot() fails closed;
-- no governed cache state is created;
-- legacy metadata()["version"] remains unchanged.
-
-G. Metrics and errors:
-- first expired lookup raises ExpiredRegistryVersionError;
-- later lookup raises UnknownRegistryVersionError;
-- expired removal increments documented counters;
-- invalidations counts entries actually removed;
-- retained_versions excludes expired entries;
-- metrics snapshot is immutable;
-- errors expose only code and registry_version.
+Do not infer requirements solely from the branch name or previous agent
+summaries.
 
 ────────────────────────────────────
-5. Public API and security boundary
+3. Define the exact Phase 2C boundary
 ────────────────────────────────────
 
-Confirm:
+Determine whether the authoritative repository evidence defines Phase 2C as:
 
-- api.py is unchanged;
-- no new HTTP endpoint exists;
-- /api/questions is unchanged;
-- /api/registry is unchanged;
-- /api/roles is unchanged;
-- metadata() shape is unchanged;
-- no governed snapshot or descriptor leaks publicly;
-- metadata cannot grant authorization;
-- no secret, credential, path or payload leaks through errors.
+- semantic-plan typed contracts;
+- semantic-plan validator;
+- validation against the governed metadata registry;
+- safe deterministic validation errors;
+- compatibility with RegistrySnapshot and registry_version;
 
-────────────────────────────────────
-6. Independent test execution
-────────────────────────────────────
+and identify precisely which additional responsibilities are included.
 
-Run independently:
+Explicitly classify each of the following as:
 
-1. registry cache tests;
-2. service-version-boundary tests;
-3. Phase 2A registry contract tests;
-4. metadata registry service tests;
-5. API routes and serialization tests;
-6. FIFO and duplicate registration focused tests;
-7. TTL boundary and policy validation tests;
-8. canonical identity ordering tests;
-9. strict-off registration tests;
-10. concurrency test repeatedly at least 10 times;
-11. golden-baseline tests;
-12. full backend suite;
-13. coverage gate;
-14. git diff --check;
-15. repository-approved local secret scanner if available;
-16. otherwise a clearly labelled pattern-based tracked-file fallback.
+- INCLUDED IN PHASE 2C
+- EXCLUDED FROM PHASE 2C
+- DEFERRED TO A LATER PHASE
+- AMBIGUOUS / REQUIRES PRODUCT DECISION
 
-Report exact commands and exact counts.
+Items to classify:
 
-Confirm:
-
-- API compatibility count is 156 unless additional named files justify
-  another total;
-- all 3 skips are pre-existing;
-- tests leave no tracked file modified;
-- worktree is clean afterward.
+- semantic-plan Pydantic models;
+- supported semantic operation types;
+- dataset, field, relationship, intent and question references;
+- registry_version binding;
+- validation against current snapshots;
+- validation against historical retained snapshots;
+- unknown metadata-reference handling;
+- unsupported operation handling;
+- deterministic error ordering;
+- SQL generation;
+- SQL execution;
+- SQL safety validation;
+- authorization;
+- runtime routing;
+- recipe migration or recipe execution;
+- KPI and glossary behavior;
+- output templates;
+- dynamic suggestions;
+- publish and approval workflow;
+- rollback;
+- deployment;
+- public HTTP endpoints;
+- persistence or SQL-backed plan storage.
 
 ────────────────────────────────────
-7. Final verdict
+4. Security and ownership boundaries
+────────────────────────────────────
+
+Define the required security contract.
+
+At minimum determine:
+
+- semantic plans must never grant authorization;
+- metadata must not grant authorization;
+- validation must not expose governed records, payloads, secrets or paths;
+- error objects may expose only safe codes and safe identifiers;
+- validation must not execute SQL;
+- validation must not execute recipes or tools;
+- validation must not perform deployment;
+- public API compatibility must remain unchanged unless an authoritative
+  requirement explicitly says otherwise.
+
+Identify the appropriate ownership boundaries between:
+
+- semantic-plan contract models;
+- semantic-plan validator;
+- MetadataRegistryService;
+- RegistrySnapshotCache;
+- future runtime or recipe components.
+
+────────────────────────────────────
+5. Produce a Phase 2C contract proposal
+────────────────────────────────────
+
+Produce a proposed authoritative Phase 2C contract containing:
+
+1. Objective
+2. Included scope
+3. Explicit exclusions
+4. Typed models required
+5. Validator responsibilities
+6. Registry and version interaction
+7. Deterministic validation rules
+8. Safe error contract
+9. Strict-on and strict-off behavior
+10. Public API compatibility
+11. Security boundary
+12. Test requirements
+13. Acceptance criteria
+14. Expected implementation files
+15. Expected documentation artifact
+16. Proposed branch name
+17. Proposed stacked PR base and head
+18. Deferred Phase 2D–2G responsibilities
+
+Preferred branch name:
+
+phase2/semantic-plan-contract-validator
+
+Preferred stacked PR:
+
+- base: phase2/service-version-boundary
+- head: phase2/semantic-plan-contract-validator
+- Draft: yes
+
+────────────────────────────────────
+6. Ambiguity handling
+────────────────────────────────────
+
+Do not implement code during this task.
+
+If authoritative sources fully define Phase 2C:
+
+- return a requirement-to-source traceability table;
+- return a complete implementation plan.
+
+If requirements are incomplete or contradictory:
+
+- identify each ambiguity precisely;
+- propose the smallest safe product-owner decision needed;
+- do not silently choose a behavior;
+- do not begin implementation.
+
+────────────────────────────────────
+7. Final response
 ────────────────────────────────────
 
 Return:
 
-1. Overall verdict:
-   - PASS
-   - PASS WITH CONDITIONS
-   - PARTIAL
-   - FAIL
-
-2. Verified PR #12 state, base, head and full SHA
-3. Verified stacked ancestry and concise commit graph
-4. Remediation-only file inventory
-5. Full PR #12 file inventory
-6. Explanation of 6-versus-7 file count
-7. FIFO and duplicate-registration findings
-8. Policy and TTL findings
-9. Canonical identity findings
-10. Strict-off findings
-11. Metrics and error findings
-12. Public API and security findings
-13. Exact tests, skips and coverage
-14. Required actions before Phase 2C
-15. Confirmation that this audit changed nothing
-
-Approve starting Phase 2C only if the verdict is exactly PASS.
+1. Starting branch and SHA verification
+2. Exact authoritative Phase 2C sources
+3. Exact included scope
+4. Exact excluded/deferred scope
+5. Requirement-to-source traceability table
+6. Proposed typed contract
+7. Proposed validator responsibilities
+8. Registry-version interaction
+9. Security and public-API boundaries
+10. Required tests and acceptance criteria
+11. Expected files
+12. Branch/worktree/stacked-PR plan
+13. Ambiguities requiring approval
+14. Confirmation that no files, branches, PRs or settings were changed
