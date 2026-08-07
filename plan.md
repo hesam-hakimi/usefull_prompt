@@ -1,83 +1,51 @@
-Investigate only the remaining Copilot workflow command-routing integration failure.
+Continue with the Copilot workflow command-routing failure that was just investigated.
 
-Do not modify any files yet.
-Do not package or install.
-Do not investigate Artifact Reuse, Run Diagnosis, STTM, Config Explain, or activationEvents in this task.
+The investigation concluded STALE_TEST, not a product defect.
 
-Known current state:
-- Workspace visibility: fixed and verified.
-- Run Diagnosis regressions: fixed and verified.
-- Artifact Reuse intent routing: fixed and independently VERIFIED.
-- The remaining Electron failure to investigate in this task is the workflow command-routing contract.
+Authoritative current contract:
 
-Observed failure:
-chatParticipantActivation.test.ts expects the workflow phrase to route to:
-  databricks-etl-copilot.previewCopilotWorkflow
+* ETLChatParticipant routes high-confidence natural workflow phrases through databricks-etl-copilot.manageCopilotWorkflow.
+* The lifecycle operation is passed as WorkflowAction (preview, setup, audit, repair, upgrade, etc.).
+* WorkflowManagerCommand then dispatches the action to the appropriate direct lifecycle command.
+* Product documentation, newer routing tests, command registration, and git history all confirm that this manager-based architecture is intentional.
+* The stale expectation is in chatParticipantActivation.test.ts, approximately the workflow-routing tests around lines 80–113.
 
-Current implementation appears to route through:
-  databricks-etl-copilot.manageCopilotWorkflow
-with an action argument.
+Implement the smallest source-only test correction.
 
-Your task is to determine the authoritative intended contract before proposing any change.
+Requirements:
 
-Investigate:
+1. Do not change ETLChatParticipant.ts, WorkflowManagerCommand.ts, production routing behavior, command registration, or packaged product assets.
+2. Update chatParticipantActivation.test.ts so the tests validate the canonical manager contract instead of expecting direct lifecycle commands.
+3. Capture command arguments where necessary and assert:
+    * result.metadata.workflowCommand === COPILOT_WORKFLOW_COMMANDS.manage
+    * result.metadata.workflowAction equals the expected action for each phrase
+    * the executed command is COPILOT_WORKFLOW_COMMANDS.manage
+    * the matching lifecycle action is passed to the manager.
+4. Cover at least the existing preview/setup/audit/repair/upgrade workflow phrases currently represented by the stale tests.
+5. Preserve the second layer of behavior: WorkflowManagerCommand must still dispatch those manager actions to the corresponding direct lifecycle commands. Do not remove or weaken the existing backward-compatible dispatch tests.
+6. Run the narrowest relevant test set first:
+    * chatParticipantActivation.test.ts
+    * relevant phase5AgentRouter workflow-routing tests
+    * relevant copilotWorkflowCustomization manager-dispatch tests
+7. Only run broader tests if those focused results indicate a regression or if required by the repository contract.
+8. Capture the task-start dirty-tree baseline. Do not treat pre-existing dirty files as changes from this task.
+9. Invoke a fresh independent Verifier on the exact task diff and focused evidence.
 
-1. The failing test and its exact expectation.
-2. The current implementation in ETLChatParticipant and related workflow routing code.
-3. package.json command/contribution declarations.
-4. Current call sites for:
-   - previewCopilotWorkflow
-   - manageCopilotWorkflow
-5. Git history/blame around the change from direct preview routing to manager-command + action routing.
-6. Whether the newer manager-command architecture intentionally supersedes the older direct preview command.
-7. Whether packaged/product agents, prompts, or workflow assets depend on one contract or the other.
+Acceptance criteria:
 
-Classify the root cause as exactly one of:
+* stale direct-command expectations are gone;
+* natural workflow phrases resolve to manageCopilotWorkflow + WorkflowAction;
+* manager-to-direct-command dispatch remains verified;
+* no production behavior is changed;
+* no unrelated files are modified.
 
-A. PRODUCT_DEFECT
-   Current implementation accidentally broke the intended direct command contract.
+Delivery classification: source-only.
+Do not package, install, reload, or run live smoke for this task.
 
-B. STALE_TEST
-   Manager-command + action is the intentional canonical architecture and the test still asserts the old contract.
+At the end report:
 
-C. CONTRACT_INCONSISTENCY
-   Different authoritative product surfaces currently require incompatible routing contracts.
-
-D. INSUFFICIENT_EVIDENCE
-
-Do not choose based only on which code is newest.
-Use product architecture and repository evidence.
-
-Return:
-
-CURRENT_ROUTING:
-...
-
-EXPECTED_BY_TEST:
-...
-
-COMMAND_REGISTRATION:
-...
-
-CALL_SITE_EVIDENCE:
-...
-
-GIT_HISTORY_EVIDENCE:
-...
-
-PACKAGED_PRODUCT_IMPACT:
-...
-
-ROOT_CAUSE:
-A | B | C | D
-
-RECOMMENDED_FIX:
-- exact file(s) that should change
-- whether production code or test should change
-- why
-
-REGRESSION_TESTS_REQUIRED:
-...
-
-FILES_CHANGED:
-None
+* exact files changed;
+* old vs new assertion contract;
+* focused test results;
+* independent Verifier result;
+* remaining unrelated failing test groups, without fixing them.
