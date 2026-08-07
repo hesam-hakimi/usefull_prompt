@@ -9,27 +9,28 @@ Do not copy them into an end-user ETL repository.
 1. `README.md`
 2. `AGENTS.md`
 
-## 2. Workflow target, lifecycle, and recovery contracts
+## 2. Workflow target, lifecycle, delivery, and recovery contracts
 
 3. `workflow/targets.yml`
 4. `workflow/README.md`
 5. `workflow/execution-recovery.md`
+6. `workflow/shipped-extension-delivery.md`
 
 ## 3. Repository-wide Copilot instructions
 
-6. `.github/copilot-instructions.md`
-7. `.github/instructions/business-context.instructions.md`
-8. `.github/instructions/change-safety.instructions.md`
-9. `.github/instructions/workflow-asset-boundaries.instructions.md`
-10. `.github/instructions/workflow-coherence.instructions.md`
-11. `.github/instructions/execution-recovery.instructions.md`
+7. `.github/copilot-instructions.md`
+8. `.github/instructions/business-context.instructions.md`
+9. `.github/instructions/change-safety.instructions.md`
+10. `.github/instructions/workflow-asset-boundaries.instructions.md`
+11. `.github/instructions/workflow-coherence.instructions.md`
+12. `.github/instructions/execution-recovery.instructions.md`
 
 ## 4. Maintainer-only agents
 
-12. `.github/agents/orchestrator.agent.md`
-13. `.github/agents/evidence-researcher.agent.md`
-14. `.github/agents/planner.agent.md`
-15. `.github/agents/verifier.agent.md`
+13. `.github/agents/orchestrator.agent.md`
+14. `.github/agents/evidence-researcher.agent.md`
+15. `.github/agents/planner.agent.md`
+16. `.github/agents/verifier.agent.md`
 
 These agents belong only to the extension repository’s development workflow.
 
@@ -37,27 +38,27 @@ They are not templates for the agents generated in consumer repositories.
 
 ## 5. Maintainer prompt entry points
 
-16. `.github/prompts/build.prompt.md`
-17. `.github/prompts/investigate.prompt.md`
-18. `.github/prompts/plan-change.prompt.md`
-19. `.github/prompts/verify-change.prompt.md`
-20. `.github/prompts/verify-live-flow.prompt.md`
+17. `.github/prompts/build.prompt.md`
+18. `.github/prompts/investigate.prompt.md`
+19. `.github/prompts/plan-change.prompt.md`
+20. `.github/prompts/verify-change.prompt.md`
+21. `.github/prompts/verify-live-flow.prompt.md`
 
 ## 6. Business, change, evidence, and result contracts
 
-21. `docs/business-context.md`
-22. `docs/system-map.md`
-23. `docs/change-contract.md`
-24. `docs/definition-of-done.md`
-25. `templates/request.md`
-26. `templates/evidence-packet.md`
-27. `templates/result.md`
+22. `docs/business-context.md`
+23. `docs/system-map.md`
+24. `docs/change-contract.md`
+25. `docs/definition-of-done.md`
+26. `templates/request.md`
+27. `templates/evidence-packet.md`
+28. `templates/result.md`
 
 ## 7. Mechanical validation
 
-28. `scripts/validate-workflow.mjs`
-29. `scripts/assert-control-plane-clean.mjs`
-30. `.github/workflows/validate-workflow.yml`
+29. `scripts/validate-workflow.mjs`
+30. `scripts/assert-control-plane-clean.mjs`
+31. `.github/workflows/validate-workflow.yml`
 
 ## Validation
 
