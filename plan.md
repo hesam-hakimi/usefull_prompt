@@ -1,125 +1,84 @@
-Validate the newly copied maintainer workflow/control-plane assets in this real Databricks ETL Copilot extension source repository.
+Fix only the two BLOCKER findings from the latest Databricks ETL workflow validation.
 
-This is a READ-ONLY VALIDATION task first.
+Repository:
+etl_framework_extension
 
-Context:
-- I have already copied the latest workflow/control-plane files into this production extension repository.
-- Do not assume they are correct merely because they exist.
-- We need to prove that they integrate correctly with the actual extension repository before using them for further product development.
-- This repository contains both maintainer control-plane assets and packaged product/runtime assets. Preserve that ownership boundary.
+Current branch:
+feature/v3-agentic-redesign
 
-Objectives:
+Scope is maintainer control-plane workflow assets only.
 
-1. Resolve the current repository root, current branch, and classify this workspace as the extension-source / maintainer repository.
+BLOCKER 1 — orchestrator.agent.md
 
-2. Inventory the newly copied workflow/control-plane assets that are relevant to:
-   - maintainer Orchestrator behavior
-   - planning
-   - implementation delegation
-   - independent verification
-   - packaging
-   - installation
-   - post-install/live-smoke verification
-   - lifecycle / continuation state
-   - protected-path handling
+The workflow validator currently fails with:
 
-3. Compare those assets against the actual extension repository structure and current scripts/package commands.
-   Do not rely only on documentation assertions.
+orchestrator.agent.md is missing required rule:
+workflow/shipped-extension-delivery.md
 
-4. Verify that the workflow supports this lifecycle for a shipped-extension change:
+Update orchestrator.agent.md with the smallest coherent change so its existing "Follow" / required-workflow-source contract explicitly includes:
 
-   PLAN
-   -> IMPLEMENT
-   -> TARGETED TEST
-   -> INDEPENDENT VERIFY
-   -> PACKAGE VSIX
-   -> INSTALL VSIX
-   -> STOP AT INSTALLED_NOT_ACTIVATED if host reload is required
-   -> USER RELOAD
-   -> LIVE SMOKE TEST
-   -> POST_INSTALL_VERIFIED
+workflow/shipped-extension-delivery.md
 
-5. Verify that implementation/test success alone cannot be reported as full DONE for a shipped-extension change when packaging/install/live-smoke verification is still required.
+Preserve the existing wording and ordering style as much as possible.
+Do not redesign the agent.
 
-6. Verify target ownership and protection boundaries:
-   - maintainer workflow/control-plane may modify only its owned paths when appropriate
-   - packaged product assets must not be casually rewritten by workflow validation
-   - consumer ETL workspace files must never be mutated by this validation
-   - existing unrelated WIP must not be absorbed into this task
+BLOCKER 2 — definition-of-done.md
 
-7. Run the repository-supported workflow validation/check commands that are relevant.
-   Prefer existing scripts such as workflow validation/control-plane cleanliness checks if present.
-   Discover the actual commands from the repository rather than inventing them.
+The current Definition of Done does not encode the shipped-extension lifecycle gate.
 
-8. Check for stale references, missing agents, missing scripts, broken relative paths, invalid YAML/frontmatter, invalid role/delegation names, and references to files/tools that do not exist in the production extension repository.
+Add the smallest coherent shipped-extension delivery section stating that:
 
-9. Do NOT:
-   - implement fixes yet
-   - package a VSIX
-   - install an extension
-   - modify consumer artifacts
-   - edit protected product/runtime assets merely to make validation pass
-   - normalize unrelated existing WIP
-   - hide or weaken failing checks
+- source-level implementation/test/verification is not sufficient to declare a shipped-extension task done;
+- a shipped-extension task is NOT done at source verification;
+- PACKAGE, INSTALL, required host RELOAD, LIVE_SMOKE, and POST_INSTALL_VERIFIED must complete as applicable;
+- the task may report DONE only after POST_INSTALL_VERIFIED;
+- lifecycle states must remain consistent with:
+  workflow/shipped-extension-delivery.md
+  workflow/README.md
+  workflow/targets.yml
+  templates/result.md
 
-If a defect is found, stop after diagnosis and identify the smallest coherent fix. Do not implement it in this turn.
+Use the existing workflow terminology exactly where possible.
+Do not invent another lifecycle.
 
-Return exactly these sections:
+IMPORTANT SCOPE BOUNDARIES
 
-## Validation Status
-PASS / PARTIAL / FAIL
+Do not modify:
+- resources/copilot/**
+- src/customization/**
+- consumer ETL workspaces
+- packaged product agents/skills/prompts
+- unrelated workflow assets
 
-## Repository Resolution
-- repository root
-- branch
-- target classification
+Do not fix the MEDIUM/LOW findings in this task:
+- stale test:integration/test:all references in SKILL.md
+- validate-workflow.mjs fail-fast behavior
+- missing package npm alias
 
-## Workflow Assets Inspected
-List exact paths.
+After the two edits:
 
-## Lifecycle Validation
-For each stage:
-PLAN
-IMPLEMENT
-TEST
-VERIFY
-PACKAGE
-INSTALL
-RELOAD
-LIVE_SMOKE
-POST_INSTALL_VERIFIED
+1. Run:
+   node scripts/validate-workflow.mjs
 
-Report:
-- supported: yes/no
-- owning agent/script
-- evidence path
-- gap if any
+2. Run:
+   node scripts/assert-control-plane-clean.mjs
 
-## Validation Commands Run
-For each command:
-- exact command
-- result
-- relevant output summary
+3. Confirm the workflow validator reaches the success state:
+   "Copilot workflow contract is valid."
 
-## Ownership / Safety Checks
-- protected paths
-- consumer-workspace protection
-- unrelated-WIP handling
-- approval boundaries
+4. If validation exposes another BLOCKER after these two are fixed,
+   STOP and report it rather than broadening scope.
 
-## Findings
-Severity: BLOCKER / HIGH / MEDIUM / LOW
-For each finding include:
-- exact file/path
-- exact problem
-- evidence
-- smallest recommended fix
+5. Have a fresh independent Verifier review only these two changes.
 
-## Files Changed
-Must be:
-NONE
+Return:
+- validation result
+- exact files changed
+- exact relevant sections changed
+- verifier verdict
+- any residual blocker
 
-## Recommendation
-State whether we are safe to proceed to the first real end-to-end workflow execution test.
-
-Do not make any changes in this turn.
+Do not build a VSIX.
+Do not package.
+Do not install.
+Do not modify the test environment.
