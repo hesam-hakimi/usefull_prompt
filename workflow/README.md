@@ -1,12 +1,26 @@
 # Agent Workflow Contract
 
-This directory defines the repository’s mandatory task lifecycle, target policy, handoff rules, and completion gates.
+This directory defines the repository’s mandatory task lifecycle, target policy, handoff rules, delivery behavior, and completion gates.
 
 The workflow applies to all maintainer agents operating in this repository.
 
+For shipped extension changes, `workflow/shipped-extension-delivery.md` is part of this contract. For evidence and recovery, use `workflow/execution-recovery.md`.
+
+## Delivery classification
+
+Every mutating extension task is exactly one of:
+
+- `source-only` — documentation, maintainer workflow, tests, or source work the user explicitly does not want packaged or installed;
+- `shipped-extension` — extension code, parser/runtime behavior, packaged Copilot assets, tool registration, manifests, dependencies, or any product behavior that must be exercised from the installed VSIX;
+- `operational-only` — a standalone build/package/install/activation/smoke request against already-existing source.
+
+An implementation/fix/change request classified as `shipped-extension` owns one bounded local delivery chain for the exact task artifact. The user must not be required to send separate messages merely to build, package, verify, or locally install that same artifact.
+
+This local delivery authorization never includes marketplace publishing, remote deployment, production actions, destructive external changes, or unrelated consumer writes.
+
 ## Primary lifecycle
 
-Every task follows this state machine:
+The normal source lifecycle is:
 
 ```text
 INTAKE
@@ -22,17 +36,38 @@ IMPLEMENTING
 IMPLEMENTED
   ↓
 VERIFIED
-  ↓
-DONE
 ```
 
-At any stage, the task may move to:
+What happens next depends on delivery classification:
 
 ```text
-BLOCKED
+source-only:
+VERIFIED → DONE
+
+shipped-extension:
+VERIFIED
+  ↓
+BUILT
+  ↓
+PACKAGED
+  ↓
+PACKAGE_VERIFIED
+  ↓
+INSTALLED_NOT_ACTIVATED
+  ↓
+ACTIVATED_NOT_SMOKE_TESTED
+  ↓
+POST_INSTALL_VERIFIED
+  ↓
+DONE
+
+operational-only:
+perform only the explicitly requested operational stages
 ```
 
-`BLOCKED` is required when correctness, authorization, target ownership, or validation cannot be established safely.
+At any stage, the task may move to `BLOCKED`.
+
+`BLOCKED` is required when correctness, authorization, target ownership, evidence, tooling, or validation cannot be established safely.
 
 ## Agent topology
 
@@ -43,18 +78,24 @@ User request
     ↓
 Orchestrator
     ↓
+Evidence Researcher, when required
+    ↓
 Planner
     ↓
 Orchestrator implementation
     ↓
+Source/package validation
+    ↓
 Fresh Verifier
     ↓
-Orchestrator final response
+source-only → final response
+    ↓
+shipped-extension → local install → reload → live smoke → fresh live Verifier when required → final response
 ```
 
 The user should interact with the Orchestrator.
 
-The user is not expected to switch manually between agents.
+The user is not expected to switch manually between agents or to create artificial follow-up tasks for routine shipped-extension delivery stages.
 
 ## Roles
 
@@ -64,17 +105,21 @@ The Orchestrator owns the task lifecycle.
 
 Responsibilities:
 
-- classify the request;
+- classify the request and delivery mode;
 - resolve target ownership;
 - display the target-resolution report;
 - gather relevant context;
+- invoke Evidence Researcher when required;
 - delegate planning;
 - review and narrow the plan when necessary;
 - implement the approved scope;
-- run validation;
+- run source validation;
+- build/package/verify/install shipped-extension artifacts when applicable;
 - delegate independent verification;
-- correct verified defects;
-- return the final result.
+- correct grounded verified defects before the package-verification boundary;
+- resume the same shipped-extension task after host reload when the exact installed package is unchanged and checkpoint state remains trustworthy;
+- run the narrowest changed-path live smoke;
+- return the final result or exact non-terminal lifecycle state.
 
 The Orchestrator must not claim independent verification unless a fresh Verifier actually performed it.
 
@@ -89,20 +134,12 @@ Responsibilities:
 - define scope and exclusions;
 - identify affected contracts and tests;
 - identify protected paths;
+- classify delivery;
 - propose the smallest coherent plan;
-- identify risks and blockers.
+- identify risks and blockers;
+- for `shipped-extension`, include version/package identity, canonical build/package path, package verification, local install, activation boundary, and exact live smoke criteria.
 
-The Planner returns:
-
-```text
-PLAN_READY
-```
-
-or:
-
-```text
-PLAN_BLOCKED
-```
+The Planner returns `PLAN_READY` or `PLAN_BLOCKED`.
 
 The Planner does not edit files, run destructive commands, publish, deploy, install, or approve writes.
 
@@ -112,30 +149,20 @@ The Verifier is fresh and read-only.
 
 Responsibilities:
 
-- independently inspect target resolution;
+- independently inspect target resolution and delivery classification;
 - compare implementation with the original request;
 - inspect exact changed files;
 - inspect compatibility and protected paths;
 - review test evidence;
+- inspect package identity/content evidence when applicable;
 - reproduce relevant validation when possible;
 - separate pre-existing failures from new regressions;
+- distinguish package verification, installation, activation, and live runtime proof;
 - reject unsupported completion claims.
 
-The Verifier returns:
+The Verifier returns `VERIFIED`, `CHANGES_REQUIRED`, or `BLOCKED`.
 
-```text
-VERIFIED
-```
-
-```text
-CHANGES_REQUIRED
-```
-
-or:
-
-```text
-BLOCKED
-```
+A pre-install `VERIFIED` result for `shipped-extension` means the verified package may continue to local install. It does not mean the task is `DONE`.
 
 ## State contract
 
@@ -149,6 +176,7 @@ Required work:
 
 - assign a task ID;
 - classify the request;
+- classify delivery;
 - extract outcome, acceptance criteria, constraints, exclusions, and target hints;
 - determine whether it is read-only, mutating, or operational.
 
@@ -156,25 +184,28 @@ Exit condition:
 
 - the request is sufficiently understood to resolve its target.
 
-A new mutating or operational user message always begins a new task at `INTAKE`.
+A genuinely new mutating or operational user message begins a new task at `INTAKE`.
 
-Examples:
+Examples of later standalone requests that are new tasks:
 
-- “now build it”;
-- “bump the version”;
-- “install the VSIX”;
+- “now build it” after the earlier task ended;
+- “bump the version” as a new request;
+- “install the VSIX” when no active shipped-extension task already authorizes the install;
 - “publish it”;
 - “make one more change”;
 - “repair the generated agents”;
 - “upgrade the workflow assets”.
 
-Previous approvals and verification evidence do not carry into the new task.
+Do not apply this new-task rule between build/package/verify/install/activation/smoke stages that are already part of the same authorized `shipped-extension` task.
+
+Previous approvals and verification evidence do not carry into a genuinely new task.
 
 ### `TARGET_RESOLVED`
 
 Required work:
 
 - classify the target;
+- classify delivery;
 - resolve the workspace root;
 - identify canonical source;
 - identify generated destination;
@@ -196,6 +227,7 @@ Mandatory visible report:
 Task ID:
 Request class:
 Target type:
+Delivery classification:
 Workspace root:
 Canonical source:
 Generated destination:
@@ -219,11 +251,11 @@ Required work:
 - inspect only relevant files;
 - identify current behavior;
 - identify desired behavior;
-- locate affected callers, manifests, writers, contracts, and tests;
+- locate affected callers, manifests, writers, contracts, tests, package inputs, and runtime path when applicable;
 - record invariants and protected paths;
 - identify conflicts in sources of truth.
 
-Do not search unrelated folders to accumulate context.
+Do not search unrelated folders merely to accumulate context.
 
 When operating in a consumer workspace:
 
@@ -245,6 +277,7 @@ Planner input must include:
 - original request;
 - task ID;
 - target-resolution report;
+- delivery classification;
 - acceptance criteria;
 - relevant evidence;
 - current behavior;
@@ -266,8 +299,11 @@ Contracts:
 Tests:
 Risks:
 Implementation sequence:
+Delivery sequence:
 Verification contract:
 ```
+
+For `shipped-extension`, `Delivery sequence` must cover package/version identity, canonical build/package commands, package verification, one local install, host reload boundary, and exact changed-path smoke criteria.
 
 The Orchestrator reviews the plan before implementation.
 
@@ -293,48 +329,58 @@ If implementation evidence invalidates the plan, return to `CONTEXT_READY` or `P
 
 Entry requirements:
 
-- planned change is complete;
+- planned source change is complete;
 - exact diff has been inspected;
 - relevant targeted checks have run;
-- generated or packaged artifacts have been inspected when applicable;
 - target resolution remains unchanged.
 
 This is not a completion state.
 
-The Orchestrator must now create the verification handoff.
+For `source-only`, prepare the normal independent verification handoff.
+
+For `shipped-extension`, continue through the planned build/package path, verify package contents, record exact package identity/path, then create the pre-install independent verification handoff.
 
 ### `VERIFIED`
 
-The Verifier must independently confirm:
+The Verifier must independently confirm the applicable stage:
 
 1. target and ownership are correct;
-2. requested behavior is implemented;
-3. acceptance criteria are satisfied;
-4. protected paths remain untouched;
-5. compatibility is preserved or intentionally changed;
-6. tests support the result;
-7. pre-existing failures are not misreported as new successes or regressions;
-8. Windows and POSIX behavior is covered where path logic changed;
-9. generated output uses the intended workspace;
-10. no external-directory fallback was introduced.
+2. delivery classification is correct;
+3. requested behavior is implemented;
+4. acceptance criteria for the current stage are satisfied;
+5. protected paths remain untouched;
+6. compatibility is preserved or intentionally changed;
+7. tests support the result;
+8. pre-existing failures are not misreported as new successes or regressions;
+9. Windows and POSIX behavior is covered where path logic changed;
+10. generated output uses the intended workspace;
+11. no external-directory fallback was introduced;
+12. package identity/content matches the exact source diff when applicable.
 
 A Verifier response must use:
 
 ```text
 Status: VERIFIED | CHANGES_REQUIRED | BLOCKED
+Lifecycle stage:
 Target:
+Delivery classification:
 Acceptance criteria:
 Changed files:
 Protected paths:
 Validation reproduced:
+Package/runtime identity:
 Compatibility:
 Findings:
 Residual risk:
 ```
 
-If `CHANGES_REQUIRED`, the task returns to `IMPLEMENTING`.
+If `CHANGES_REQUIRED`, the task returns to `IMPLEMENTING` when remediation is still valid inside the current task.
 
 After corrections, use a fresh verification pass.
+
+For `source-only`, `VERIFIED` may lead to `DONE`.
+
+For `shipped-extension`, pre-install `VERIFIED` leads to local installation; it is not task completion.
 
 ### `DONE`
 
@@ -344,19 +390,20 @@ After corrections, use a fresh verification pass.
 - all material acceptance criteria pass;
 - risks are reported;
 - files and checks are enumerated;
-- Planner and Verifier outcomes are recorded when required.
+- Planner and Verifier outcomes are recorded when required;
+- for `shipped-extension`, the lifecycle reached `POST_INSTALL_VERIFIED` against the newly active version.
 
-`DONE` applies only to the exact task, diff, and artifacts verified.
+`DONE` applies only to the exact task, diff, package identity when applicable, and artifacts verified.
 
-A later operational request starts again at `INTAKE`.
+A later standalone operational request starts again at `INTAKE`.
 
 ## Target ownership matrix
 
 | Target class | Canonical source | Destination | Mutation policy |
 | --- | --- | --- | --- |
 | Maintainer workflow | `.github/**`, `AGENTS.md`, `workflow/**` | Extension repository | Only by explicit request |
-| Product Copilot assets | `resources/copilot/**` | VSIX/package | Edit source, then package and verify |
-| Product generation logic | `src/customization/**` | Runtime-generated consumer files | Edit implementation and tests |
+| Product Copilot assets | `resources/copilot/**` | VSIX/package | Edit canonical source, then follow shipped-extension delivery when installed behavior must change |
+| Product generation logic | `src/customization/**` | Runtime-generated consumer files | Edit implementation/tests; follow shipped-extension delivery when runtime behavior changes |
 | Consumer generated assets | Packaged templates and generator | `<consumer-workspace>/.github/**` | Preview, validate, approve, then write |
 | Test generated assets | Test fixture source | Temporary workspace | Never write to repository root |
 
@@ -432,7 +479,7 @@ Write-capable tests must:
 5. verify containment;
 6. perform writes only inside it;
 7. clean up after success and failure;
-8. confirm repository `.github/**` remains unchanged.
+8. confirm repository `.github/**` remains unchanged unless maintainer workflow itself is the explicit test target.
 
 Forbidden test destinations:
 
@@ -482,7 +529,7 @@ The implementation must also handle equality with the workspace root when equali
 
 ## Build and installation lifecycle
 
-These are separate states:
+These are separate evidence states:
 
 ```text
 SOURCE_VERIFIED
@@ -493,6 +540,8 @@ SOURCE_VERIFIED
   → ACTIVATED_NOT_SMOKE_TESTED
   → POST_INSTALL_VERIFIED
 ```
+
+The complete rules are in `workflow/shipped-extension-delivery.md`.
 
 ### `BUILT`
 
@@ -516,15 +565,18 @@ Evidence:
 Evidence:
 
 - bundle included;
-- required templates included;
+- required templates/resources/registrations included when applicable;
 - forbidden files absent;
-- manifest checks pass.
+- manifest/version checks pass;
+- package corresponds to the exact verified source diff.
 
 ### `INSTALLED_NOT_ACTIVATED`
 
+For a verified `shipped-extension` artifact, install exactly the verified local package once as part of the same task.
+
 Installation succeeded, but the running VS Code window may still use the previous extension version.
 
-Required user action:
+Required user/environment action:
 
 ```text
 Developer: Reload Window
@@ -532,29 +584,34 @@ Developer: Reload Window
 
 or restart the host.
 
+The reload itself does not start a new task for the exact unchanged installed package.
+
 ### `ACTIVATED_NOT_SMOKE_TESTED`
 
-The installed version is active, but the changed behavior has not yet been exercised live.
+The installed version is confirmed active, but the changed behavior has not yet been exercised live.
 
 ### `POST_INSTALL_VERIFIED`
 
-The activated extension passed a live scenario covering the changed behavior.
+The newly activated extension passed a live scenario covering the changed behavior.
 
 Installation alone must never be reported as full product verification.
 
 ## Approval boundary
 
-Approval belongs to:
+Approval belongs to exact scope and identity.
 
-- one task;
-- one preview;
-- one manifest;
-- one workspace;
-- one selected artifact set;
-- one exact content checksum;
-- one operational action.
+For a `shipped-extension` implementation/fix/change, the original request authorizes the routine bounded local version/build/package/package-verification/install/activation/read-only-smoke chain for the exact unchanged artifact.
 
-Approval is invalid if any of these change.
+Approval is still separately required for:
+
+- mutating consumer writes or smoke scenarios under the normal preview/write contract;
+- marketplace publishing;
+- remote deployment;
+- production actions;
+- destructive external changes;
+- other operations outside the accepted task.
+
+Approval or verification is invalidated when content, destination, workspace, target, or verified package identity changes.
 
 The writer must fail closed when previewed and requested state differ.
 
@@ -562,11 +619,12 @@ The writer must fail closed when previewed and requested state differ.
 
 Use `templates/result.md`.
 
-Minimum final report:
+Minimum report:
 
 ```text
 Status:
 Task ID:
+Delivery classification:
 
 Target resolution:
 - target type
@@ -587,9 +645,17 @@ Compatibility:
 
 Validation:
 
+Delivery evidence:
+- source/package/installed/active versions
+- package path
+- activation state
+- smoke result
+
 Delegation:
+- Evidence Researcher when required
 - Planner
-- Verifier
+- pre-install Verifier
+- live Verifier when required
 
 Risks:
 ```
