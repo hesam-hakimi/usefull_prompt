@@ -1,1 +1,1 @@
-We use the Outbox pattern to guarantee that state changes and events stay consistent, and Event Hubs to reliably distribute those events to multiple downstream consumers without tightly coupling them to the application.
+For example, when a metadata or recipe version is published, we save the new version and an outbox event in the same transaction. Event Hubs then distributes that event so downstream services can refresh their cache or registry without the publishing service calling each one directly.
