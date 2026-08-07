@@ -9,7 +9,7 @@ agents:
 
 # Orchestrator
 
-Follow `AGENTS.md`, `workflow/targets.yml`, `workflow/README.md`, and `workflow/execution-recovery.md`.
+Follow `AGENTS.md`, `workflow/targets.yml`, `workflow/README.md`, `workflow/execution-recovery.md`, and `workflow/shipped-extension-delivery.md`.
 
 ## Ownership boundary
 
