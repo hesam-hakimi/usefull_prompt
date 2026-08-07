@@ -72,10 +72,16 @@ const requiredAgentRules = [
   "Consumer workspace and external-path policy",
   "Workflow states",
   "Automatic orchestration",
+  "Delivery classification",
   "Change-safety invariants",
   "Regression policy",
+  "Build, package, and installation lifecycle",
   "Output contract",
   "Stop conditions",
+  "workflow/shipped-extension-delivery.md",
+  "Do **not** split the automatic local build/package/verify/install/activation/smoke chain",
+  "For `shipped-extension`, `VERIFIED` is a pre-install source/package gate, not completion",
+  "POST_INSTALL_VERIFIED",
 ];
 
 const requiredTargetRules = [
@@ -84,6 +90,7 @@ const requiredTargetRules = [
   "explicit_approval_required: true",
   "root_policy: unique-os-temporary-directory",
   "description: Target cannot be proven safely",
+  "delivery_classification:",
   "implementation_request_authorizes_local_delivery_chain: true",
   "automatic_version_policy: next-patch-on-collision-only",
   "new_task_between_internal_stages: false",
@@ -98,16 +105,29 @@ const requiredOrchestratorRules = [
   "- Evidence Researcher",
   "- Planner",
   "- Verifier",
+  "workflow/shipped-extension-delivery.md",
+  "## Delivery classification",
   "Immediately emit the required `## Target Resolution` report",
   "invoke `Evidence Researcher` as a subagent",
   "Invoke `Planner` as a subagent",
   "Invoke `Verifier` as a fresh subagent",
   "Before asking the user any question, classify it",
+  "install exactly the verified local package once",
+  "resume the same task from the checkpoint",
   "A source or package change discovered after package verification",
   "INSTALLED_NOT_ACTIVATED",
   "POST_INSTALL_VERIFIED",
   "Do not perform or simulate final verification yourself",
   "maximum of two same-task remediation cycles",
+];
+
+const requiredPlannerRules = [
+  "disable-model-invocation: false",
+  "Classify delivery as exactly one of `source-only`, `shipped-extension`, or `operational-only`",
+  "For `shipped-extension`, the plan is incomplete unless it includes",
+  "one local install of the verified package",
+  "final `POST_INSTALL_VERIFIED` acceptance evidence",
+  "Do not split these routine local delivery steps into separate user requests",
 ];
 
 const requiredEvidenceResearcherRules = [
@@ -124,6 +144,8 @@ const requiredVerifierRules = [
   "disable-model-invocation: false",
   "Do not edit files",
   "## Shipped-extension checks",
+  "Before local installation",
+  "post-install/live verification",
   "POST_INSTALL_VERIFIED",
   "`VERIFIED`",
   "`CHANGES_REQUIRED`",
@@ -138,6 +160,7 @@ const requiredBuildRules = [
   "continue automatically through the delivery chain instead of stopping at source validation",
   "invoke `Verifier` as a fresh, independent subagent",
   "locally install exactly the verified package once",
+  "resume the same shipped-extension task from the checkpoint",
   "Do not role-play or simulate Evidence Researcher, Planner, or Verifier",
   "Do not repeatedly retry a failed action without new evidence",
   "only then may a shipped-extension task return `DONE`",
@@ -160,7 +183,12 @@ const requiredRecoveryRules = [
   "SECURITY_BLOCKER",
   "## Recovery loop",
   "## Same-task remediation versus new task",
+  "The routine delivery stages of an already-authorized `shipped-extension` task are **same-task continuation**",
+  "Do **not** start a new task merely because the same unchanged shipped-extension package moved",
   "## Execution checkpoint",
+  "Package path/version:",
+  "Installed version:",
+  "Active version:",
   "## Source-to-runtime evidence chain",
   "## Baseline and pre-existing failures",
   "## Partial progress",
@@ -181,6 +209,47 @@ const requiredShippedDeliveryRules = [
   "locally install **exactly that verified package once**",
   "The required host reload/restart is a user/environment action, not a new task",
   "Do not split the automatic local delivery chain",
+];
+
+const requiredChangeContractRules = [
+  "Delivery classification: `source-only / shipped-extension / operational-only`",
+  "## Delivery plan",
+  "Package identity/version strategy:",
+  "Local install step, if `shipped-extension`:",
+  "Live smoke scenario for the changed path:",
+  "Installation alone is not runtime proof",
+];
+
+const requiredDoneRules = [
+  "## Delivery classification",
+  "### `shipped-extension`",
+  "A shipped-extension task is **not done** at source verification",
+  "the exact verified package was locally installed once",
+  "the final lifecycle state reached `POST_INSTALL_VERIFIED`",
+  "Only then may a shipped-extension task reach `DONE`",
+];
+
+const requiredResultRules = [
+  "Delivery classification: `source-only / shipped-extension / operational-only`",
+  "## Delivery evidence",
+  "Package version:",
+  "Installed version:",
+  "Active version:",
+  "Live smoke result:",
+  "Pre-install/source-package Verifier:",
+  "Post-activation live Verifier:",
+  "A shipped-extension task may report `done` only after `POST_INSTALL_VERIFIED`",
+];
+
+const requiredLiveFlowRules = [
+  "## Authorization mode",
+  "**same-task continuation**",
+  "**standalone operational request**",
+  "do **not** require a second user request",
+  "exact unchanged verified package",
+  "INSTALLED_NOT_ACTIVATED",
+  "POST_INSTALL_VERIFIED",
+  "fresh `Verifier`",
 ];
 
 async function read(relativePath) {
@@ -215,7 +284,8 @@ assertContains(
   agentContract,
   [
     "Before moving beyond `TARGET_RESOLVED`, emit a visible target-resolution report",
-    "A new mutating or operational request starts a new task at `INTAKE`",
+    "same-task shipped-extension lifecycle continuation",
+    "The user must not be required to send separate follow-up requests merely to build, package, verify, or locally install",
     "INSTALLED_NOT_ACTIVATED",
     "POST_INSTALL_VERIFIED",
   ],
@@ -226,27 +296,16 @@ const targetContract = await read("workflow/targets.yml");
 assertContains(targetContract, requiredTargetRules, "workflow/targets.yml");
 
 const orchestratorContract = await read(".github/agents/orchestrator.agent.md");
-assertContains(
-  orchestratorContract,
-  requiredOrchestratorRules,
-  ".github/agents/orchestrator.agent.md",
-);
+assertContains(orchestratorContract, requiredOrchestratorRules, ".github/agents/orchestrator.agent.md");
 
-const evidenceResearcherContract = await read(
-  ".github/agents/evidence-researcher.agent.md",
-);
-assertContains(
-  evidenceResearcherContract,
-  requiredEvidenceResearcherRules,
-  ".github/agents/evidence-researcher.agent.md",
-);
+const plannerContract = await read(".github/agents/planner.agent.md");
+assertContains(plannerContract, requiredPlannerRules, ".github/agents/planner.agent.md");
+
+const evidenceResearcherContract = await read(".github/agents/evidence-researcher.agent.md");
+assertContains(evidenceResearcherContract, requiredEvidenceResearcherRules, ".github/agents/evidence-researcher.agent.md");
 
 const verifierContract = await read(".github/agents/verifier.agent.md");
-assertContains(
-  verifierContract,
-  requiredVerifierRules,
-  ".github/agents/verifier.agent.md",
-);
+assertContains(verifierContract, requiredVerifierRules, ".github/agents/verifier.agent.md");
 
 const buildContract = await read(".github/prompts/build.prompt.md");
 assertContains(buildContract, requiredBuildRules, ".github/prompts/build.prompt.md");
@@ -266,28 +325,19 @@ assertContains(
 );
 
 const liveFlowContract = await read(".github/prompts/verify-live-flow.prompt.md");
-assertContains(
-  liveFlowContract,
-  [
-    "INSTALLED_NOT_ACTIVATED",
-    "POST_INSTALL_VERIFIED",
-    "active version",
-    "live",
-    "requires a new task at `INTAKE`",
-    "fresh `Verifier`",
-  ],
-  ".github/prompts/verify-live-flow.prompt.md",
-);
+assertContains(liveFlowContract, requiredLiveFlowRules, ".github/prompts/verify-live-flow.prompt.md");
 
 const workflowContract = await read("workflow/README.md");
 assertContains(
   workflowContract,
   [
+    "## Delivery classification",
     "## Agent topology",
     "User request",
     "Fresh Verifier",
     "## State contract",
-    "A new mutating or operational user message always begins a new task at `INTAKE`.",
+    "Do not apply this new-task rule between build/package/verify/install/activation/smoke stages",
+    "For `shipped-extension`, pre-install `VERIFIED` leads to local installation; it is not task completion",
     "## Build and installation lifecycle",
     "INSTALLED_NOT_ACTIVATED",
     "POST_INSTALL_VERIFIED",
@@ -296,18 +346,19 @@ assertContains(
 );
 
 const recoveryContract = await read("workflow/execution-recovery.md");
-assertContains(
-  recoveryContract,
-  requiredRecoveryRules,
-  "workflow/execution-recovery.md",
-);
+assertContains(recoveryContract, requiredRecoveryRules, "workflow/execution-recovery.md");
 
 const shippedDeliveryContract = await read("workflow/shipped-extension-delivery.md");
-assertContains(
-  shippedDeliveryContract,
-  requiredShippedDeliveryRules,
-  "workflow/shipped-extension-delivery.md",
-);
+assertContains(shippedDeliveryContract, requiredShippedDeliveryRules, "workflow/shipped-extension-delivery.md");
+
+const changeContract = await read("docs/change-contract.md");
+assertContains(changeContract, requiredChangeContractRules, "docs/change-contract.md");
+
+const doneContract = await read("docs/definition-of-done.md");
+assertContains(doneContract, requiredDoneRules, "docs/definition-of-done.md");
+
+const resultContract = await read("templates/result.md");
+assertContains(resultContract, requiredResultRules, "templates/result.md");
 
 const copilotInstructions = await read(".github/copilot-instructions.md");
 assertContains(
@@ -320,9 +371,7 @@ assertContains(
   ".github/copilot-instructions.md",
 );
 
-const recoveryInstruction = await read(
-  ".github/instructions/execution-recovery.instructions.md",
-);
+const recoveryInstruction = await read(".github/instructions/execution-recovery.instructions.md");
 assertContains(
   recoveryInstruction,
   [
