@@ -15,6 +15,7 @@ const requiredFiles = [
   "workflow/README.md",
   "workflow/targets.yml",
   "workflow/execution-recovery.md",
+  "workflow/shipped-extension-delivery.md",
   "templates/request.md",
   "templates/evidence-packet.md",
   "templates/result.md",
@@ -56,6 +57,7 @@ const frontmatterFiles = [
 
 const copyOrderPaths = [
   "workflow/execution-recovery.md",
+  "workflow/shipped-extension-delivery.md",
   ".github/instructions/execution-recovery.instructions.md",
   ".github/agents/evidence-researcher.agent.md",
   ".github/prompts/investigate.prompt.md",
@@ -114,20 +116,24 @@ const requiredEvidenceResearcherRules = [
 const requiredVerifierRules = [
   "disable-model-invocation: false",
   "Do not edit files",
+  "## Shipped-extension checks",
+  "POST_INSTALL_VERIFIED",
   "`VERIFIED`",
   "`CHANGES_REQUIRED`",
   "`BLOCKED`",
 ];
 
 const requiredBuildRules = [
-  "start a new task for every new mutating or operational request",
+  "classify delivery as `source-only`, `shipped-extension`, or `operational-only`",
   "emit the complete `## Target Resolution` report before any delegation",
   "invoke `Evidence Researcher` as an actual subagent",
   "invoke `Planner` as an actual subagent",
+  "continue automatically through the delivery chain instead of stopping at source validation",
   "invoke `Verifier` as a fresh, independent subagent",
+  "locally install exactly the verified package once",
   "Do not role-play or simulate Evidence Researcher, Planner, or Verifier",
   "Do not repeatedly retry a failed action without new evidence",
-  "return `DONE` only after `VERIFIED`",
+  "only then may a shipped-extension task return `DONE`",
   "INSTALLED_NOT_ACTIVATED",
   "POST_INSTALL_VERIFIED",
 ];
@@ -151,6 +157,23 @@ const requiredRecoveryRules = [
   "## Source-to-runtime evidence chain",
   "## Baseline and pre-existing failures",
   "## Partial progress",
+];
+
+const requiredShippedDeliveryRules = [
+  "# Shipped Extension Delivery Contract",
+  "`source-only`",
+  "`shipped-extension`",
+  "`operational-only`",
+  "SOURCE_VERIFIED",
+  "PACKAGE_VERIFIED",
+  "INSTALLED_NOT_ACTIVATED",
+  "ACTIVATED_NOT_SMOKE_TESTED",
+  "POST_INSTALL_VERIFIED",
+  "The user must not be required to send separate follow-up messages merely to build, package, verify, or locally install",
+  "use the next patch version only",
+  "locally install **exactly that verified package once**",
+  "The required host reload/restart is a user/environment action, not a new task",
+  "Do not split the automatic local delivery chain",
 ];
 
 async function read(relativePath) {
@@ -272,6 +295,24 @@ assertContains(
   "workflow/execution-recovery.md",
 );
 
+const shippedDeliveryContract = await read("workflow/shipped-extension-delivery.md");
+assertContains(
+  shippedDeliveryContract,
+  requiredShippedDeliveryRules,
+  "workflow/shipped-extension-delivery.md",
+);
+
+const copilotInstructions = await read(".github/copilot-instructions.md");
+assertContains(
+  copilotInstructions,
+  [
+    "workflow/shipped-extension-delivery.md",
+    "original request authorizes one bounded local delivery chain",
+    "must not split an already-authorized shipped-extension delivery chain",
+  ],
+  ".github/copilot-instructions.md",
+);
+
 const recoveryInstruction = await read(
   ".github/instructions/execution-recovery.instructions.md",
 );
@@ -280,7 +321,8 @@ assertContains(
   [
     "Before asking the user a question, classify it",
     "Do not repeatedly retry a failed action without new evidence",
-    "A source change discovered after package verification",
+    "A source or package-content change discovered after package verification",
+    "Do not apply the new-task rule between those internal delivery stages",
     "pre-existing only when reproduced",
   ],
   ".github/instructions/execution-recovery.instructions.md",
