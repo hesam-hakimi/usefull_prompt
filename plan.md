@@ -1,4 +1,4 @@
-Fix only the pretest ESLint blocker that currently prevents the real integration test from running.
+Investigate the 14 integration-test failures now exposed by the repaired `npm run test` path.
 
 Repository:
 etl_framework_extension
@@ -6,75 +6,119 @@ etl_framework_extension
 Branch:
 feature/v3-agentic-redesign
 
-Known evidence from the previous verified task:
+This is an INVESTIGATION-ONLY task.
 
-- `npm run test` is the repository's real VS Code/Electron integration-test command.
-- However it currently stops in its pretest lint phase.
-- The blocking lint error is:
-  src/core/sttm/SttmExcelWorkbookParser.ts:53
-  @typescript-eslint/no-var-requires
+Context already VERIFIED:
 
-Critical historical constraint:
+- The pretest ESLint blocker in SttmExcelWorkbookParser.ts was fixed with a single line-scoped suppression.
+- The literal `require('exceljs')` remains unchanged.
+- `npm run pretest` passes.
+- `npm run test` now successfully reaches the VS Code/Electron integration runner.
+- The runner executed 136 Mocha tests:
+  - 120 passed
+  - 14 failed
+  - 2 pending
+- Focused STTM parser tests: 35 passing.
+- Extracted-VSIX STTM packaged-runtime tests: 5 passing.
+- The previous change was independently VERIFIED.
 
-The literal/static `require('exceljs')` in SttmExcelWorkbookParser was introduced intentionally because the previous aliased/dynamic require prevented esbuild from bundling exceljs into the shipped VSIX.
+Objective:
 
-That behavior was previously fixed and validated using an extracted-VSIX parser test.
+Determine exactly what the 14 integration failures are and whether they are:
 
-DO NOT regress that fix.
+A. pre-existing baseline failures,
+B. caused by current branch/WIP changes,
+C. caused by environment or VS Code/test-host conditions,
+D. caused by stale generated/packaged assets,
+E. genuine product regressions.
 
-Task:
+DO NOT FIX ANYTHING IN THIS TASK.
 
-1. Inspect the exact lint failure and the current ExcelJS loading implementation.
+Steps:
 
-2. Make the smallest safe correction that allows ESLint/pretest to pass while preserving the existing ExcelJS bundling/runtime behavior.
+1. Re-run or inspect the integration test result using the existing repository-supported test path.
+   Use MOCHA_RESULT_FILE or the existing result artifact if useful.
 
-Preferred solution:
-- If the literal `require('exceljs')` is intentionally required for esbuild static analysis, use the narrowest justified ESLint suppression/comment for that exact line.
-- Document WHY the literal require must remain.
+2. Produce the exact list of all 14 failing tests:
+   - suite
+   - test name
+   - source test file
+   - exact failure/error
+   - relevant stack location
 
-Do NOT:
-- change it back to an aliased/dynamic require;
-- introduce a generic runtime require wrapper;
-- alter parser semantics;
-- alter STTM parsing behavior;
-- change workbook interpretation;
-- modify unrelated lint rules globally;
-- modify consumer workspace files;
-- fix unrelated existing unit-test baseline failures.
+3. Group failures by root-cause signature.
+   Do not treat 14 assertions with the same root cause as 14 independent defects.
 
-Only use a different loading implementation if repository evidence proves it preserves the extracted-VSIX ExcelJS bundling behavior exactly.
+4. For every failure group, inspect the relevant test and implementation evidence and classify it as:
+   - PRE_EXISTING_BASELINE
+   - CURRENT_WIP_REGRESSION
+   - ENVIRONMENTAL
+   - STALE_GENERATED_ASSET
+   - PRODUCT_DEFECT
+   - INCONCLUSIVE
 
-Validation requirements:
+5. Specifically check whether any failures are related to:
+   - the recently copied maintainer workflow assets;
+   - orchestrator / planner / verifier / evidence-researcher assets;
+   - packaged `resources/copilot/**`;
+   - customization/generated-agent drift;
+   - STTM parsing;
+   - ExcelJS packaging/runtime;
+   - VS Code version/test-host behavior.
 
-1. Run the focused lint/pretest validation.
-2. Run `npm run test`.
+6. Check repository history/baseline evidence where possible to determine whether each failure existed before the current relevant changes.
+   Do not simply call something "pre-existing" because it is outside the previous task scope.
 
-Important:
-`npm run test` must now get PAST the pretest/lint stage and actually invoke the VS Code/Electron integration runner. Merely proving that the command exists is not sufficient.
+7. Separate the 2 pending tests from the 14 failures and explain why they are pending.
 
-3. Run the existing extracted-VSIX/STTM parser packaging test that proves ExcelJS remains available from the packaged extension, if that test is available.
+8. Do not modify:
+   - source files
+   - tests
+   - baselines
+   - snapshots
+   - generated assets
+   - .github/**
+   - workflow/**
+   - consumer workspace files
 
-4. Run the relevant focused STTM parser tests.
+9. Do not suppress, skip, loosen, or rewrite any failing test.
 
-5. Do not fix the five previously recorded unrelated unit-baseline failures in this task.
+Return a concise but complete report:
 
-6. Invoke a fresh independent Verifier.
+## Integration Test Triage
 
-Delivery classification:
+### Summary
+- total
+- passed
+- failed
+- pending
+- number of distinct root-cause groups
 
-- If the implementation is only a narrowly-scoped lint suppression/comment and runtime output is unchanged, classify this task as source-only.
-- If any executable parser/runtime implementation changes, classify it as shipped-extension and follow the repository's shipped-extension lifecycle contract.
+### Failure Groups
 
-Return:
+For each group:
+- classification
+- affected tests
+- exact error
+- evidence
+- likely root cause
+- whether it blocks extension development/release
+- recommended next action
 
-1. root cause
-2. exact file(s) changed
-3. exact change made
-4. confirmation that literal/static ExcelJS bundling semantics were preserved
-5. lint result
-6. evidence that `npm run test` actually reached the integration runner
-7. extracted-VSIX ExcelJS/parser test result
-8. verifier verdict
-9. residual blockers
+### Pending Tests
+Explain both pending tests.
 
-Do not fix any unrelated issue discovered during this task.
+### Relationship to Recent Changes
+State explicitly whether there is evidence linking any failure to:
+- the ExcelJS lint fix,
+- STTM parser changes,
+- copied workflow/control-plane assets,
+- other current working-tree changes.
+
+### Priority
+Rank only the genuine/unresolved failure groups P0/P1/P2.
+
+### Files Changed
+Must be: NONE.
+
+Do not implement fixes.
