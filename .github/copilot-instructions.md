@@ -24,6 +24,9 @@ Rules:
 10. Before asking the user a question, classify it using `workflow/execution-recovery.md`; do not ask for data already available in an authorized source.
 11. Treat parser, retrieval, truncation, serialization, stale-state, and unavailable-tool problems as tooling gaps rather than business clarifications.
 12. On unexpected failure, stop the mutation, preserve evidence, emit an execution checkpoint, and invoke Evidence Researcher when required.
-13. Distinguish source verification, build, package, installation, activation, and live smoke evidence.
-14. A source or package fix discovered after package verification or live execution begins a new task.
-15. Report exact validation evidence and skipped checks using `templates/result.md`.
+13. Classify every extension change as `source-only` or `shipped-extension`. A change to code, packaged Copilot assets, tool registration, manifests, or other behavior that must be exercised from the installed VSIX is `shipped-extension` unless the user explicitly asks for source-only work.
+14. For a `shipped-extension` implementation/fix request, the same task must continue through local validation, a distinguishable package version when needed, build, VSIX packaging, package-content verification, one local install, activation confirmation, and a live smoke test. Do not stop at source verification and do not require a second user message just to build, package, or install the exact artifact produced by that task.
+15. Build, package, install, activation, and live smoke remain separate evidence states. Installation alone never proves activation or the changed runtime behavior. Report `INSTALLED_NOT_ACTIVATED` until the host is reloaded, and `POST_INSTALL_VERIFIED` only after the newly active version passes the changed live path.
+16. A host reload may resume the same `shipped-extension` task from its execution checkpoint when the exact installed package/version is unchanged and trusted task state is still provable. Any source or package change after package verification starts a new task and requires a new package identity.
+17. Local delivery authorization does not authorize publish, marketplace release, deployment, production actions, or unrelated consumer writes. Those remain separately approval-gated.
+18. Report exact validation evidence and skipped checks using `templates/result.md`.
