@@ -79,11 +79,18 @@ const requiredAgentRules = [
 ];
 
 const requiredTargetRules = [
-  "default_unqualified_agent_target: extension-product-agent",
-  "extension-source: deny-generated-output",
-  "consumer-etl-workspace: allow-after-approval",
-  "temporary-test-workspace: allow-during-test",
-  "unknown: block",
+  "target_class: extension-produced-agent",
+  "generated_output_allowed: false",
+  "explicit_approval_required: true",
+  "root_policy: unique-os-temporary-directory",
+  "description: Target cannot be proven safely",
+  "implementation_request_authorizes_local_delivery_chain: true",
+  "automatic_version_policy: next-patch-on-collision-only",
+  "new_task_between_internal_stages: false",
+  "package_or_source_change_after_package_verification: new-task",
+  "package_installed: INSTALLED_NOT_ACTIVATED",
+  "host_reloaded: ACTIVATED_NOT_SMOKE_TESTED",
+  "host_reloaded_and_live_smoke_passed: POST_INSTALL_VERIFIED",
 ];
 
 const requiredOrchestratorRules = [
