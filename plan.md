@@ -1,70 +1,83 @@
-Do not modify any files.
+Investigate only the remaining Copilot workflow command-routing integration failure.
 
-The fresh Verifier confirmed that the Artifact Reuse implementation itself is correct and that the only blocking finding is scope containment because the working tree contains unrelated pre-existing dirty files.
+Do not modify any files yet.
+Do not package or install.
+Do not investigate Artifact Reuse, Run Diagnosis, STTM, Config Explain, or activationEvents in this task.
 
-Do NOT change ArtifactReuseIntentRouter.ts.
-Do NOT change artifactReuseConversation.test.ts.
-Do NOT clean, reset, revert, stash, or commit unrelated working-tree changes.
+Known current state:
+- Workspace visibility: fixed and verified.
+- Run Diagnosis regressions: fixed and verified.
+- Artifact Reuse intent routing: fixed and independently VERIFIED.
+- The remaining Electron failure to investigate in this task is the workflow command-routing contract.
 
-Your task is only to establish a grounded verification boundary for this completed task.
+Observed failure:
+chatParticipantActivation.test.ts expects the workflow phrase to route to:
+  databricks-etl-copilot.previewCopilotWorkflow
 
-The intended task diff is exactly:
+Current implementation appears to route through:
+  databricks-etl-copilot.manageCopilotWorkflow
+with an action argument.
 
-1. ArtifactReuseIntentRouter.ts
-2. artifactReuseConversation.test.ts
+Your task is to determine the authoritative intended contract before proposing any change.
 
-Do the following:
+Investigate:
 
-1. Reconstruct the task boundary from this session's execution evidence:
-   - identify the files that were already modified before this Artifact Reuse task began;
-   - identify the exact two files modified by this task;
-   - distinguish PRE_EXISTING_DIRTY from TASK_DIFF.
+1. The failing test and its exact expectation.
+2. The current implementation in ETLChatParticipant and related workflow routing code.
+3. package.json command/contribution declarations.
+4. Current call sites for:
+   - previewCopilotWorkflow
+   - manageCopilotWorkflow
+5. Git history/blame around the change from direct preview routing to manager-command + action routing.
+6. Whether the newer manager-command architecture intentionally supersedes the older direct preview command.
+7. Whether packaged/product agents, prompts, or workflow assets depend on one contract or the other.
 
-2. Use git/status/diff evidence where useful, but do not claim that a dirty file is pre-existing unless the task/session evidence supports it.
+Classify the root cause as exactly one of:
 
-3. Produce a scope table:
+A. PRODUCT_DEFECT
+   Current implementation accidentally broke the intended direct command contract.
 
-   File
-   Current dirty?
-   Changed by this task?
-   Evidence
-   Classification
+B. STALE_TEST
+   Manager-command + action is the intentional canonical architecture and the test still asserts the old contract.
 
-4. Confirm whether this task modified anything outside:
-   - ArtifactReuseIntentRouter.ts
-   - artifactReuseConversation.test.ts
+C. CONTRACT_INCONSISTENCY
+   Different authoritative product surfaces currently require incompatible routing contracts.
 
-5. Then invoke a FRESH independent Verifier and explicitly give it the scoped task boundary.
+D. INSUFFICIENT_EVIDENCE
 
-The verification question is:
-
-"Did this Artifact Reuse task itself modify any file outside the two-file task diff?"
-
-The existence of unrelated pre-existing dirty files MUST NOT by itself count as a scope violation.
-
-The Verifier should evaluate:
-- the exact two-file task diff;
-- the recorded task-start/task-execution evidence;
-- behavior/regression evidence already produced;
-- whether any out-of-scope modification was attributable to THIS task.
-
-Do not ask the Verifier to require a globally clean working tree.
+Do not choose based only on which code is newest.
+Use product architecture and repository evidence.
 
 Return:
 
-TASK_DIFF:
+CURRENT_ROUTING:
 ...
 
-PRE_EXISTING_DIRTY:
+EXPECTED_BY_TEST:
 ...
 
-SCOPE_EVIDENCE:
+COMMAND_REGISTRATION:
 ...
 
-FRESH_VERIFIER_RESULT:
-VERIFIED | CHANGES_REQUIRED | BLOCKED
+CALL_SITE_EVIDENCE:
+...
 
-If VERIFIED, explicitly state:
-"No out-of-scope file was changed by this task."
+GIT_HISTORY_EVIDENCE:
+...
 
-If reliable task-start evidence is genuinely unavailable, return BLOCKED_SCOPE_PROVENANCE instead of changing files or fabricating evidence.
+PACKAGED_PRODUCT_IMPACT:
+...
+
+ROOT_CAUSE:
+A | B | C | D
+
+RECOMMENDED_FIX:
+- exact file(s) that should change
+- whether production code or test should change
+- why
+
+REGRESSION_TESTS_REQUIRED:
+...
+
+FILES_CHANGED:
+None
