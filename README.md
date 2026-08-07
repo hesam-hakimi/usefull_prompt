@@ -11,7 +11,8 @@ The workflow is context-, evidence-, and target-first:
 5. It creates a bounded change plan.
 6. It implements only the approved scope.
 7. A fresh verifier checks the exact target, diff, package/runtime evidence, and regressions.
-8. The agent returns a predictable result or a bounded recovery checkpoint.
+8. For shipped extension behavior, the same task continues through build, package verification, one local install, activation, and changed-path live smoke verification.
+9. The agent returns a predictable result or a bounded recovery checkpoint.
 
 ```mermaid
 flowchart LR
@@ -25,7 +26,11 @@ flowchart LR
     G -->|Yes| H["Implement"]
     G -->|No| X["Blocked"]
     H --> I["Verify"]
-    I --> J["Result / Recovery"]
+    I --> J{"Shipped extension?"}
+    J -->|No| K["Result / Recovery"]
+    J -->|Yes| L["Build → Package → Verify → Install"]
+    L --> M["Reload → Live smoke"]
+    M --> K
 ```
 
 ## Quick start
@@ -35,8 +40,9 @@ flowchart LR
 3. Run `/build` and provide the goal, target, acceptance criteria, constraints, and out-of-scope work.
 4. Review target resolution before allowing implementation.
 5. When root cause or runtime behavior is unclear, run `/investigate` or let Orchestrator invoke `Evidence Researcher`.
-6. After package or installation work, run `/verify-live-flow`; installation alone is not live verification.
-7. Review the returned result: changed behavior, files, validation evidence, compatibility impact, lifecycle state, and remaining risks.
+6. For a `shipped-extension` implementation/fix, do not start a second build/package/install request. The same task should package and locally install the verified VSIX automatically, then stop at `INSTALLED_NOT_ACTIVATED` only when a host reload is required.
+7. After reload, resume the same task so it can confirm the active version and run the changed-path live smoke test. `/verify-live-flow` remains available for a standalone operational verification request.
+8. Review the returned result: changed behavior, files, validation evidence, compatibility impact, lifecycle state, and remaining risks.
 
 For plan-only work, run `/plan-change`. For an independent review of an existing diff, run `/verify-change`.
 
@@ -74,6 +80,7 @@ The same relative path can have different ownership in different repositories. R
 | `workflow/targets.yml` | Machine-readable target and write policy |
 | `workflow/README.md` | Core lifecycle, states, target resolution, and risk gates |
 | `workflow/execution-recovery.md` | Evidence gate, question routing, recovery loop, checkpoints, and new-task rules |
+| `workflow/shipped-extension-delivery.md` | Automatic local delivery contract for build, package verification, install, activation, and changed-path smoke of shipped extension changes |
 | `docs/business-context.md` | Business goals, terminology, rules, and invariants |
 | `docs/system-map.md` | Components, contracts, asset topology, dependencies, and test map |
 | `docs/change-contract.md` | Required before/after contract for non-trivial changes |
@@ -104,6 +111,7 @@ The same relative path can have different ownership in different repositories. R
 - Preserve `@etl /workflow create` and its preview-first, approval-gated generation behavior.
 - Report blockers instead of bypassing missing evidence or unavailable tools.
 - Do not repeatedly retry a failed stage without new evidence.
+- A shipped-extension implementation/fix owns its bounded local build/package/install/activation/smoke chain; a later standalone operational request is a new task.
 - A live failure requiring source or package changes starts a new task.
 
-The detailed authority, precedence, execution, recovery, and output rules live in [AGENTS.md](AGENTS.md), [workflow/README.md](workflow/README.md), and [workflow/execution-recovery.md](workflow/execution-recovery.md).
+The detailed authority, precedence, execution, recovery, delivery, and output rules live in [AGENTS.md](AGENTS.md), [workflow/README.md](workflow/README.md), [workflow/execution-recovery.md](workflow/execution-recovery.md), and [workflow/shipped-extension-delivery.md](workflow/shipped-extension-delivery.md).
