@@ -1,170 +1,94 @@
-Implement ONLY the confirmed Config Explain fixture correction for the final
-remaining Electron failure:
+────────────────────────────────────
+MANDATORY EXECUTION — DO NOT DELEGATE COMMANDS TO THE USER
+────────────────────────────────────
 
-"Config Explain Integration resolves env variables for lineage outputs"
+Do not merely provide commands for the user to run.
 
-Task classification: source-only test correction.
-Target type: extension-source.
+You must execute every bootstrap and validation command yourself in the
+current VS Code Remote SSH environment.
 
-Do not package, install, reload, publish, or run a live smoke test.
+After creating the local control folder, execute the following workflow
+using resolved absolute paths.
 
-AUTHORITATIVE INVESTIGATION RESULT
+1. Resolve and enter the repository root:
 
-ROOT_CAUSE: FIXTURE_DEFECT
+   REPO_ROOT="$(git rev-parse --show-toplevel)"
 
-The failing test fixture currently supplies the environment configuration as a
-single-line inline object similar to:
+2. Resolve the Git common directory safely:
 
-{ synapse.schema: "acz0001" }
+   COMMON_GIT_DIR="$(
+     git rev-parse --path-format=absolute --git-common-dir 2>/dev/null ||
+     true
+   )"
 
-The current supported parser path is line-based. It interprets the opening brace
-as part of the key, producing a malformed key such as:
+   If the result is empty, derive the absolute Git common directory safely
+   from git rev-parse --git-common-dir.
 
-"{ synapse.schema"
+3. Execute the authentication probe yourself:
 
-Therefore `${synapse.schema}` is not substituted, and the lineage target is
-rendered incorrectly instead of:
+   "$REPO_ROOT/.kmai-dev-agent/run.sh" probe
 
-synapse:acz0001.digital_event
+   The expected exact stdout is:
 
-The repository's canonical environment configs use normal HOCON-style
-key/value entries rather than this single-line inline-object fixture shape.
+   KMAI_DEV_AGENT_AUTH_OK
 
-SAFETY GATE
+4. Verify the local exclude rule yourself:
 
-Before editing, confirm from repository documentation, canonical env configs,
-neighboring fixtures, and tests that single-line inline HOCON objects are not an
-explicitly supported product contract.
+   grep -nF '/.kmai-dev-agent/' "$COMMON_GIT_DIR/info/exclude"
 
-- If inline-object syntax is explicitly required or documented as supported,
-  STOP without editing and report PRODUCT_DEFECT.
-- Otherwise proceed with the fixture-only correction below.
+5. Create and remove the temporary ignore marker yourself:
 
-REQUIRED CHANGE
+   touch "$REPO_ROOT/.kmai-dev-agent/.ignore-check"
 
-Modify only:
+   git -C "$REPO_ROOT" check-ignore -v \
+     .kmai-dev-agent/.ignore-check
 
-src/test/suite/explain/explain.integration.test.ts
+   rm -f "$REPO_ROOT/.kmai-dev-agent/.ignore-check"
 
-At the environment fixture near the failing test, replace the malformed
-single-line inline object with the exact canonical key/value formatting used by
-real repository environment configurations.
+6. Verify that no local-agent file is tracked:
 
-Use the repository-supported equivalent of:
+   git -C "$REPO_ROOT" ls-files -- .kmai-dev-agent
 
-synapse.schema = "acz0001"
+   This command must return no tracked path.
 
-Use the exact formatting style evidenced in canonical env configs; do not
-invent a new syntax.
+7. Capture the final repository status:
 
-PRESERVE THE TEST CONTRACT
+   git -C "$REPO_ROOT" status \
+     --porcelain=v1 \
+     --untracked-files=all
 
-Keep unchanged:
+8. Compare the final status byte-for-byte with the baseline captured before
+   the setup.
 
-- the dbTable expression;
-- the writer format/provider input;
-- the expected lineage value;
-- the assertion requiring:
-  synapse:acz0001.digital_event
+   Pre-existing dirty files are allowed, but the setup must not introduce
+   any new tracked or visible untracked repository change.
 
-Do not weaken, remove, broaden, or hard-code around the assertion.
+9. Verify the Python files compile:
 
-PROTECTED FILES AND COMPONENTS
+   "$VERIFIED_KMAI_PYTHON" -m py_compile \
+     "$REPO_ROOT/.kmai-dev-agent/kmai_client.py" \
+     "$REPO_ROOT/.kmai-dev-agent/auth_probe.py"
 
-Do not modify:
+10. Verify run.sh syntax without changing the environment:
 
-- HOCONConfigValidator.ts
-- ConfigExplainService.ts
-- IncludeResolver.ts
-- OutputClassifier.ts
-- LineageBuilder.ts
-- package.json
-- any production source file
-- any consumer-workspace file
-- .github/**
-- workflow/**
-- AGENTS.md
-- resources/copilot/**
-- unrelated tests or pre-existing dirty files
+    bash -n "$REPO_ROOT/.kmai-dev-agent/run.sh"
 
-EXECUTION PROCEDURE
+Do not tell the user to execute any of these commands.
 
-1. Capture `git status --porcelain` before editing and record the task-start
-   dirty-file baseline.
+Only stop and ask for user action when:
 
-2. Make the smallest coherent fixture-only correction.
+- an authentication permission must be granted externally;
+- the verified KMAI Python environment cannot be identified;
+- the Managed Identity available to the SSH server cannot call the
+  configured model;
+- executing a required command would modify a tracked repository file,
+  branch, PR, credential, or deployment.
 
-3. Run the exact focused Electron test:
+In the final response include:
 
-   Config Explain Integration resolves env variables for lineage outputs
-
-4. Confirm its actual lineage target contains exactly:
-
-   synapse:acz0001.digital_event
-
-5. Run the neighboring Config Explain test slice.
-
-6. Run the relevant HOCON/environment-substitution unit tests, if already
-   available. Do not create unrelated parser capabilities.
-
-7. Run the normal full Electron/integration command:
-
-   npm run test
-
-8. Invoke a fresh independent Verifier scoped only to this task's diff.
-   Give the Verifier the task-start dirty-file baseline so pre-existing changes
-   are not attributed to this task.
-
-EXPECTED RESULT
-
-Previous verified baseline:
-
-138 total / 135 passed / 1 failed / 2 pending
-
-Expected after this correction:
-
-138 total / 136 passed / 0 failed / 2 pending
-
-The two pending Chat API tests may remain pending. Explain any count difference
-with exact test names.
-
-ACCEPTANCE CRITERIA
-
-- The named Config Explain test passes.
-- The expected lineage target remains:
-  synapse:acz0001.digital_event
-- Only `src/test/suite/explain/explain.integration.test.ts` is changed by this
-  task.
-- No assertion is weakened.
-- No production code is changed.
-- No parser capability is added.
-- No consumer workspace is modified.
-- No package/install/reload/live-smoke action occurs.
-- Fresh independent Verifier returns VERIFIED.
-
-RETURN
-
-## CONTRACT_SAFETY_CHECK
-State whether inline-object HOCON syntax is documented as supported and cite
-the repository evidence used.
-
-## EXACT_CHANGE
-Show the old fixture shape and new fixture shape.
-
-## FOCUSED_TEST_RESULT
-
-## FULL_TEST_RESULT
-Include total, passed, failed, and pending counts and names of any non-passing
-tests.
-
-## VERIFIER_RESULT
-
-## SCOPE_CONFIRMATION
-List:
-- task-diff file;
-- pre-existing dirty files;
-- production files changed;
-- consumer files changed;
-- package/install status.
-
-## FILES_CHANGED
+- each command executed;
+- its sanitized exit code;
+- the relevant sanitized output;
+- exact probe result;
+- exact Git-status comparison result;
+- confirmation that the user has no remaining manual bootstrap command.
