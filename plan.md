@@ -1,26 +1,38 @@
-Retry ONLY the fresh independent Verifier for the completed Artifact Reuse Intent Regression fix.
+Do not modify any files.
 
-Do not modify any source or test files.
-Do not rerun implementation.
-Do not package or install.
+The fresh independent Verifier returned CHANGES_REQUIRED for the Artifact Reuse Intent Regression fix.
 
-The previous two Verifier invocations failed before execution with platform server error 500.
+I need the exact Verifier findings before any further implementation.
 
-Verify the existing diff only:
-- ArtifactReuseIntentRouter.ts
-- artifactReuseConversation.test.ts
+Report, verbatim where possible:
 
-Confirm:
-1. the fix is generic and not prompt-specific;
-2. ordinary CREATE prompts containing status/passed/failed/config/job/file/table remain non-reuse;
-3. genuine contextual reuse/readiness requests still route correctly;
-4. the full Electron result remains consistent with 3 remaining unrelated failure groups;
-5. no out-of-scope files were changed.
+1. Every finding returned by the fresh Verifier.
+2. Severity of each finding.
+3. Exact affected file(s) and function/test names.
+4. Which acceptance criterion failed:
+   - generic/non-prompt-specific implementation
+   - ordinary CREATE prompts remain non-reuse
+   - genuine contextual reuse/readiness still routes correctly
+   - full Electron result / unrelated failure isolation
+   - scope containment
+5. Whether each finding is:
+   - PRODUCT_DEFECT
+   - TEST_DEFECT
+   - REGRESSION
+   - PRE_EXISTING
+   - VERIFIER_MISINTERPRETATION
+6. The smallest recommended correction for each real finding.
 
-Return exactly one of:
-VERIFIED
-CHANGES_REQUIRED
-BLOCKED
+Do NOT implement the corrections yet.
+Do NOT change source or tests.
+Do NOT rerun implementation.
+Do NOT package or install.
 
-If the Verifier infrastructure again returns a platform error before execution,
-report BLOCKED_VERIFIER_PLATFORM_ERROR and make no changes.
+End with:
+
+VERIFIER_FINDINGS:
+- ...
+- ...
+
+RECOMMENDED_NEXT_ACTION:
+...
