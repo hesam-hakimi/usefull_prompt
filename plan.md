@@ -1,4 +1,4 @@
-Fix ONLY the VS Code/Electron integration-test workspace visibility defect.
+Investigate and fix ONLY the Run Diagnosis regression group from the current Electron integration suite.
 
 Repository:
 etl_framework_extension
@@ -6,136 +6,178 @@ etl_framework_extension
 Branch:
 feature/v3-agentic-redesign
 
-This is a narrowly scoped IMPLEMENT + TEST + VERIFY task.
+This is a narrowly scoped INVESTIGATE → IMPLEMENT → TEST → VERIFY task.
 
-Do NOT investigate or fix any of the other integration-test failure groups in this task.
-
-Known evidence from the completed integration-test triage:
-
-The full Electron integration runner executed:
+Current verified integration baseline:
 
 - Total: 136
-- Passed: 120
-- Failed: 14
+- Passed: 122
+- Failed: 12
 - Pending: 2
 
-Five distinct root-cause groups were identified.
+The workspace-visibility defect has already been fixed and independently VERIFIED.
 
-This task addresses ONLY root-cause group #5:
+Do NOT modify or revisit that fix.
 
-ENVIRONMENTAL — Config Explain tests lack workspace visibility in the current VS Code/Electron test host.
+This task addresses ONLY the Run Diagnosis regression group, currently accounting for 8 failures.
 
-Affected tests identified by the investigation include:
+Known triage evidence from the previous investigation:
 
-- explain.integration.tests.ts
-  - builds lineage and include graph from workspace files
-  - resolves env variables for lineage outputs
+Affected areas include RunDiagnosisService / RunDiagnosisRenderer / TroubleshootingAdvisor and related integration tests.
 
-- ConfigExplainInputResolver.tests.ts
-  - resolves workspace files by relative path
-  - resolves workspace files by bare filename
+Observed failures include:
 
-Observed errors include:
+1. full flow column mismatch scenario
+   - actual diagnosis: `unknown`
+   - expected: `schema_mismatch`
 
-- expected the `etl_framework_extension` workspace folder but it was not available through `vscode.workspace.workspaceFolders`
-- job config file could not be found in the workspace
+2. remediation prompt rendering
+   - expected job-specific remediation wording is missing or changed
 
-Existing evidence:
+3. multiple error log entries
+   - expected multiple matched errors
+   - actual result differs
 
-- `runTests.ts` launches the VS Code/Electron tests without explicitly opening the repository as the test workspace.
-- `explain.integration.tests.ts` expects `vscode.workspace.workspaceFolders` to include `etl_framework_extension`.
-- Older July 30 Electron logs show these tests passing.
-- The investigation classified this as an ENVIRONMENTAL/test-host workspace-visibility issue, not a Config Explain product-logic defect.
-- There is no evidence linking this failure group to:
-  - ExcelJS changes
-  - STTM parser changes
-  - copied Copilot workflow/control-plane assets
-  - packaged `resources/copilot/**`
+4. permission-denied diagnosis
+   - `result.diagnosis` is falsy
 
-Objective:
+5. resource-exhausted / OOM diagnosis
+   - `result.diagnosis` is falsy
 
-Make the VS Code/Electron integration runner deterministically open the intended repository/workspace so integration tests see the expected workspace folder.
+6. log filtering
+   - expected ERROR/WARN log details count differs
 
-Required behavior:
+7. generic ADF output error extraction
+   - actual diagnosis `unknown`
+   - expected `missing_source`
 
-1. Inspect the current VS Code Electron test bootstrap, especially:
-   - runTests.ts
-   - VS Code test-electron launch configuration
-   - any integration-test bootstrap/helper responsible for workspace launch.
+8. related diagnosis timing / extraction behavior reported by the integration suite
 
-2. Confirm the exact root cause before editing.
+Prior investigation identified likely contract drift across:
 
-3. Implement the SMALLEST GENERIC fix that makes the intended repository/workspace explicit when launching the Electron integration tests.
+- error extraction
+- diagnosis pattern matching
+- SQL/log-detail handling
+- TroubleshootingAdvisor input expectations
+- remediation renderer wording
 
-4. Do NOT add a special case for:
-   - `etl_framework_extension`
-   - Config Explain
-   - any individual test name.
+Important evidence already observed:
 
-The runner should generically launch against the intended test workspace/repository.
+- `RunDiagnosisService.ts` only maps SQL log details when both
+  `logResult.found` and `logResult.executionLog` are present.
 
-5. Prefer fixing the test harness/bootstrap rather than weakening product code or test assertions.
+- Some tests provide `found=true` and `logDetails` / `errorMessage`
+  without the expected `executionLog`, resulting in missing diagnostic evidence.
 
-6. Do NOT change Config Explain production behavior unless evidence proves the production implementation itself is defective.
+- `TroubleshootingAdvisor` expects an AnalysisException-style shape before some
+  `cannot resolve ... given input columns` messages can classify correctly;
+  otherwise they fall through to `unknown`.
 
-7. Do NOT:
-   - modify or skip the affected tests merely to make them green;
-   - weaken assertions;
-   - hard-code a machine-specific absolute path;
-   - suppress failures;
-   - modify STTM parser semantics;
-   - modify ExcelJS packaging behavior;
-   - modify `.github/**`, `AGENTS.md`, `workflow/**`, or consumer-workspace files;
-   - fix any of the other four root-cause groups.
+- `RunDiagnosisRenderer.ts` remediation wording has changed to guarded-remediation
+  language while at least one integration test still expects older job-config wording.
 
-After implementation run:
+Older Electron logs showed these diagnosis tests passing, so determine whether each
+failure represents:
+A. a real product regression,
+B. an intentional contract change with a stale test,
+or
+C. an invalid/misaligned test fixture.
 
-A. the affected Config Explain tests;
-B. the relevant Electron integration test path;
-C. the normal repository-supported integration test command (`npm run test`) if feasible.
+Do not assume all 8 share one fix.
 
-Report the exact before/after result.
+Required approach:
 
-Then invoke a FRESH independent Verifier.
+1. Re-run ONLY the Run Diagnosis failing tests and capture exact assertions,
+   actual values, and stack locations.
+
+2. Group the 8 failures by root cause.
+
+3. For each root cause, inspect the production implementation and test history/current
+   contract before editing.
+
+4. Decide explicitly whether PRODUCT CODE or TEST EXPECTATION is wrong.
+
+5. Fix the canonical contract, not merely the assertions.
+
+Guardrails:
+
+- Do NOT weaken tests simply to make them pass.
+- Do NOT blanket-map unknown errors to expected diagnoses.
+- Do NOT introduce message-specific hacks for these exact test strings.
+- Do NOT special-case CD Renewal, STTM, or any workbook.
+- Do NOT alter STTM parsing or ExcelJS behavior.
+- Do NOT modify the workspace visibility fix in `runTests.ts`.
+- Do NOT touch `.github/**`, `AGENTS.md`, `workflow/**`, or consumer workspaces.
+- Do NOT fix:
+  - Artifact Reuse Router
+  - Config Explain env/HOCON substitution
+  - Copilot workflow command routing
+  - activationEvents/chatParticipants
+- Preserve fail-closed behavior for genuinely unrecognized runtime errors.
+
+The resulting diagnosis pipeline must generically support:
+
+raw runtime/ADF/log evidence
+→ normalized evidence
+→ error extraction
+→ diagnosis classification
+→ remediation/advisor
+→ rendered user guidance
+
+Validation:
+
+A. Run the affected Run Diagnosis unit tests.
+B. Run the affected Run Diagnosis integration tests in Electron.
+C. Run relevant focused diagnosis suites.
+D. Run normal `npm run test` after the focused tests pass.
+E. Report the new full-suite counts.
+F. Invoke a FRESH independent Verifier.
 
 Acceptance criteria:
 
-PASS only if all of the following are true:
+PASS only if:
 
-1. The Electron test host opens the intended repository/workspace deterministically.
-2. `vscode.workspace.workspaceFolders` contains the expected launched workspace during integration execution.
-3. The four failures belonging to this ENVIRONMENTAL group pass.
-4. No test was skipped, weakened, suppressed, or rewritten merely to pass.
-5. No machine-specific path was introduced.
-6. Config Explain production behavior was not unnecessarily changed.
-7. STTM/ExcelJS behavior remains unchanged.
-8. Protected workflow/control-plane paths remain untouched.
-9. Fresh Verifier returns VERIFIED.
+1. All 8 currently identified Run Diagnosis failures are either:
+   - fixed and passing, OR
+   - individually demonstrated with evidence to be stale/incorrect tests and
+     corrected to the canonical contract.
 
-Important:
+2. No unrelated failure group is modified.
 
-The remaining integration failures are OUT OF SCOPE.
+3. Unknown/unrecognized errors still fail closed rather than being guessed.
 
-Do not fix:
-- Run Diagnosis regressions
-- Artifact Reuse Router matching
-- Copilot workflow command routing
-- activationEvents/chatParticipants contract
+4. Permission, resource exhaustion/OOM, schema mismatch, missing-source,
+   multi-error, and log-filtering cases are correctly distinguished.
 
-If the full suite still contains those failures after this fix, REPORT THEM ONLY.
+5. Remediation output reflects the current intended product contract.
+
+6. Focused tests pass.
+
+7. Electron integration confirms the behavior.
+
+8. Fresh Verifier returns VERIFIED.
 
 Final report:
 
-## Workspace Visibility Fix
+## Run Diagnosis Regression Closure
 
-### Root Cause
+### Baseline
+### Failure Matrix
+For each of the 8 failures:
+- test
+- observed behavior
+- expected behavior
+- root cause
+- PRODUCT_DEFECT / STALE_TEST / FIXTURE_DEFECT
+- fix
+
+### Canonical Diagnosis Contract
 ### Files Changed
-### Exact Fix
-### Focused Test Result
-### Full Integration Result
-### Remaining Failures by Existing Root-Cause Group
+### Focused Test Results
+### Full Electron Result
+### Remaining Failures by Other Existing Root-Cause Groups
 ### Verifier Result
-### Files Outside Scope Changed
+### Out-of-Scope Files Changed
 
-Do not package or install the VSIX in this task.
-This is a source/test-harness correction only.
+Do not package or install the VSIX.
+This is source-level product/test-contract correction only.
