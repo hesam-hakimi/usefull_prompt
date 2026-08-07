@@ -1,4 +1,4 @@
-Fix only the stale TEST-stage command contract identified by the latest workflow validation.
+Fix only the pretest ESLint blocker that currently prevents the real integration test from running.
 
 Repository:
 etl_framework_extension
@@ -6,67 +6,75 @@ etl_framework_extension
 Branch:
 feature/v3-agentic-redesign
 
-This is a maintainer workflow/control-plane correction only.
+Known evidence from the previous verified task:
 
-Known finding:
+- `npm run test` is the repository's real VS Code/Electron integration-test command.
+- However it currently stops in its pretest lint phase.
+- The blocking lint error is:
+  src/core/sttm/SttmExcelWorkbookParser.ts:53
+  @typescript-eslint/no-var-requires
 
-A maintainer SKILL.md documents:
+Critical historical constraint:
 
-npm run test:integration
-npm run test:all
+The literal/static `require('exceljs')` in SttmExcelWorkbookParser was introduced intentionally because the previous aliased/dynamic require prevented esbuild from bundling exceljs into the shipped VSIX.
 
-but those scripts do not exist in package.json.
+That behavior was previously fixed and validated using an extracted-VSIX parser test.
 
-The repository's actual available test commands include the currently supported scripts such as:
-- npm run test:unit
-- npm run test:unit:guarded
-and any other test scripts that package.json proves actually exist.
+DO NOT regress that fix.
 
 Task:
 
-1. Locate the exact SKILL.md containing the stale:
-   - npm run test:integration
-   - npm run test:all
-   references.
+1. Inspect the exact lint failure and the current ExcelJS loading implementation.
 
-2. Inspect package.json and determine the canonical existing commands that should be used for the TEST lifecycle.
+2. Make the smallest safe correction that allows ESLint/pretest to pass while preserving the existing ExcelJS bundling/runtime behavior.
 
-3. Make the smallest coherent correction to SKILL.md so every TEST command it instructs an agent to run actually exists in package.json.
+Preferred solution:
+- If the literal `require('exceljs')` is intentionally required for esbuild static analysis, use the narrowest justified ESLint suppression/comment for that exact line.
+- Document WHY the literal require must remain.
 
-4. Do NOT invent new npm scripts in this task.
+Do NOT:
+- change it back to an aliased/dynamic require;
+- introduce a generic runtime require wrapper;
+- alter parser semantics;
+- alter STTM parsing behavior;
+- change workbook interpretation;
+- modify unrelated lint rules globally;
+- modify consumer workspace files;
+- fix unrelated existing unit-test baseline failures.
 
-5. Do NOT modify package.json.
+Only use a different loading implementation if repository evidence proves it preserves the extracted-VSIX ExcelJS bundling behavior exactly.
 
-6. Do NOT modify:
-   - resources/copilot/**
-   - src/customization/**
-   - consumer ETL workspaces
-   - AGENTS.md
-   - workflow lifecycle semantics
-   - packaged product agents/prompts/skills
+Validation requirements:
 
-7. Preserve the intended validation strength.
-   Do not weaken testing merely to eliminate the stale command names.
-   If test:unit:guarded is the appropriate stronger canonical replacement, use repository evidence to justify it.
+1. Run the focused lint/pretest validation.
+2. Run `npm run test`.
 
-After the edit:
+Important:
+`npm run test` must now get PAST the pretest/lint stage and actually invoke the VS Code/Electron integration runner. Merely proving that the command exists is not sufficient.
 
-- run node scripts/validate-workflow.mjs
-- run the actual replacement TEST command(s) referenced by the corrected SKILL.md
-- verify every npm command now documented by that TEST section exists in package.json
-- invoke a fresh independent Verifier
+3. Run the existing extracted-VSIX/STTM parser packaging test that proves ExcelJS remains available from the packaged extension, if that test is available.
 
-Return only:
+4. Run the relevant focused STTM parser tests.
+
+5. Do not fix the five previously recorded unrelated unit-baseline failures in this task.
+
+6. Invoke a fresh independent Verifier.
+
+Delivery classification:
+
+- If the implementation is only a narrowly-scoped lint suppression/comment and runtime output is unchanged, classify this task as source-only.
+- If any executable parser/runtime implementation changes, classify it as shipped-extension and follow the repository's shipped-extension lifecycle contract.
+
+Return:
 
 1. root cause
-2. exact file changed
-3. old command(s)
-4. replacement command(s)
-5. validation/test results
-6. verifier verdict
-7. residual blockers
+2. exact file(s) changed
+3. exact change made
+4. confirmation that literal/static ExcelJS bundling semantics were preserved
+5. lint result
+6. evidence that `npm run test` actually reached the integration runner
+7. extracted-VSIX ExcelJS/parser test result
+8. verifier verdict
+9. residual blockers
 
-If another unrelated problem is discovered, report it but do not fix it.
-
-Do not build/package/install the VSIX in this task.
-Do not modify the test environment.
+Do not fix any unrelated issue discovered during this task.
