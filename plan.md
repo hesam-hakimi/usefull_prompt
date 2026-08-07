@@ -1,76 +1,32 @@
-Implement the next bounded hardening step for STTM inactive-reference handling.
+Continue the just-completed STTM inactive-reference hardening through the packaged-runtime lifecycle.
 
-The investigation has established:
+Do NOT make additional functional changes unless packaging or live verification exposes a defect.
 
-- Excel strikethrough parsing is working correctly.
-- The parser correctly distinguishes active and inactive records.
-- The real workbook contains 64 mappings:
-  - 59 active
-  - 5 inactive
-- Active mappings FM_00012 and FM_00030 reference inactive schemas
-  T_SCHM_0008 and T_SCHM_0026.
-- STTM_REFERENCE_INACTIVE is therefore a legitimate reference-consistency finding.
+The implementation and focused verification have already passed.
 
-DO NOT change the semantic rule so that an active mapping automatically becomes inactive merely because a referenced schema/rule is inactive.
-That would hide inconsistent STTM authoring.
+Now:
 
-Implement only these two changes:
+1. Determine the current package version and bump to the next patch version.
+2. Compile/package the extension using the repository's canonical packaging workflow.
+3. Produce the VSIX.
+4. Verify the packaged VSIX contains the exact updated runtime/source behavior for:
+   - STTM strikethrough handling
+   - STTM_REFERENCE_INACTIVE preservation
+   - active mapping -> inactive required reference blocking
+   - TrustedCreatePreviewService blocked-preview behavior
+5. Run the repository's VSIX-content/package verification.
+6. Install the newly built VSIX locally.
+7. Report lifecycle as INSTALLED_NOT_ACTIVATED if VS Code reload is still required.
+8. Do NOT claim POST_INSTALL_VERIFIED until a fresh VS Code host has loaded the new version.
 
-1. Regression-test the existing strikethrough semantics.
-
-Add synthetic workbook tests covering:
-- normal active mapping
-- fully struck-through mapping is inactive
-- partially struck-through non-key/history content
-- inactive schema referenced by active mapping
-- inactive mapping referencing active schema
-- inactive BR/TR referenced from active mapping
-- current active row plus struck-through historical/deleted row
-- join/filter/error records whose identifying cells are struck through
-
-Explicitly verify that:
-- active mapping -> inactive required reference remains an active mapping
-- STTM_REFERENCE_INACTIVE is emitted
-- the mapping is NOT silently removed from activeMappings
-
-2. Strengthen generation/readiness behavior.
-
-When an ACTIVE mapping depends on an INACTIVE required schema/rule/reference:
-- preserve the diagnostic STTM_REFERENCE_INACTIVE
-- classify the affected artifact path as BLOCKED for faithful generation
-- do not invent a replacement reference
-- do not silently reactivate the referenced entity
-- do not silently deactivate the active mapping
-- unaffected STTM analysis may continue
-- preview may identify the blocked artifact, but no write may occur for an artifact whose required evidence depends on that invalid reference
-
-Keep this generic.
-Do NOT special-case:
-FM_00012
-FM_00030
-T_SCHM_0008
-T_SCHM_0026
-CD Renewal
-or any workbook filename.
+After installation, give me:
+- exact installed version
+- exact VSIX filename
+- confirmation that the relevant changed runtime files are present in the packaged VSIX
+- any packaging/test failures
+- the exact consumer-workspace smoke-test prompt I should run after Reload Window
 
 Do not modify consumer workspace files.
-
-Run targeted tests and the relevant STTM/parser/reference-resolution test suite.
-
-Return:
-
-## Implementation Result
-
-## Semantics Preserved
-
-## New Blocking Behavior
-
-## Regression Tests
-
-## Files Changed
-
-## Test Results
-
-## Compatibility / Risks
-
-## Independent Verifier Result
+Do not make unrelated changes.
+Do not touch pre-existing unrelated WIP.
+Require an independent Verifier for the packaged delta.
