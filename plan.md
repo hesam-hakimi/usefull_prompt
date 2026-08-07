@@ -1,84 +1,72 @@
-Fix only the two BLOCKER findings from the latest Databricks ETL workflow validation.
+Fix only the stale TEST-stage command contract identified by the latest workflow validation.
 
 Repository:
 etl_framework_extension
 
-Current branch:
+Branch:
 feature/v3-agentic-redesign
 
-Scope is maintainer control-plane workflow assets only.
+This is a maintainer workflow/control-plane correction only.
 
-BLOCKER 1 — orchestrator.agent.md
+Known finding:
 
-The workflow validator currently fails with:
+A maintainer SKILL.md documents:
 
-orchestrator.agent.md is missing required rule:
-workflow/shipped-extension-delivery.md
+npm run test:integration
+npm run test:all
 
-Update orchestrator.agent.md with the smallest coherent change so its existing "Follow" / required-workflow-source contract explicitly includes:
+but those scripts do not exist in package.json.
 
-workflow/shipped-extension-delivery.md
+The repository's actual available test commands include the currently supported scripts such as:
+- npm run test:unit
+- npm run test:unit:guarded
+and any other test scripts that package.json proves actually exist.
 
-Preserve the existing wording and ordering style as much as possible.
-Do not redesign the agent.
+Task:
 
-BLOCKER 2 — definition-of-done.md
+1. Locate the exact SKILL.md containing the stale:
+   - npm run test:integration
+   - npm run test:all
+   references.
 
-The current Definition of Done does not encode the shipped-extension lifecycle gate.
+2. Inspect package.json and determine the canonical existing commands that should be used for the TEST lifecycle.
 
-Add the smallest coherent shipped-extension delivery section stating that:
+3. Make the smallest coherent correction to SKILL.md so every TEST command it instructs an agent to run actually exists in package.json.
 
-- source-level implementation/test/verification is not sufficient to declare a shipped-extension task done;
-- a shipped-extension task is NOT done at source verification;
-- PACKAGE, INSTALL, required host RELOAD, LIVE_SMOKE, and POST_INSTALL_VERIFIED must complete as applicable;
-- the task may report DONE only after POST_INSTALL_VERIFIED;
-- lifecycle states must remain consistent with:
-  workflow/shipped-extension-delivery.md
-  workflow/README.md
-  workflow/targets.yml
-  templates/result.md
+4. Do NOT invent new npm scripts in this task.
 
-Use the existing workflow terminology exactly where possible.
-Do not invent another lifecycle.
+5. Do NOT modify package.json.
 
-IMPORTANT SCOPE BOUNDARIES
+6. Do NOT modify:
+   - resources/copilot/**
+   - src/customization/**
+   - consumer ETL workspaces
+   - AGENTS.md
+   - workflow lifecycle semantics
+   - packaged product agents/prompts/skills
 
-Do not modify:
-- resources/copilot/**
-- src/customization/**
-- consumer ETL workspaces
-- packaged product agents/skills/prompts
-- unrelated workflow assets
+7. Preserve the intended validation strength.
+   Do not weaken testing merely to eliminate the stale command names.
+   If test:unit:guarded is the appropriate stronger canonical replacement, use repository evidence to justify it.
 
-Do not fix the MEDIUM/LOW findings in this task:
-- stale test:integration/test:all references in SKILL.md
-- validate-workflow.mjs fail-fast behavior
-- missing package npm alias
+After the edit:
 
-After the two edits:
+- run node scripts/validate-workflow.mjs
+- run the actual replacement TEST command(s) referenced by the corrected SKILL.md
+- verify every npm command now documented by that TEST section exists in package.json
+- invoke a fresh independent Verifier
 
-1. Run:
-   node scripts/validate-workflow.mjs
+Return only:
 
-2. Run:
-   node scripts/assert-control-plane-clean.mjs
+1. root cause
+2. exact file changed
+3. old command(s)
+4. replacement command(s)
+5. validation/test results
+6. verifier verdict
+7. residual blockers
 
-3. Confirm the workflow validator reaches the success state:
-   "Copilot workflow contract is valid."
+If another unrelated problem is discovered, report it but do not fix it.
 
-4. If validation exposes another BLOCKER after these two are fixed,
-   STOP and report it rather than broadening scope.
-
-5. Have a fresh independent Verifier review only these two changes.
-
-Return:
-- validation result
-- exact files changed
-- exact relevant sections changed
-- verifier verdict
-- any residual blocker
-
-Do not build a VSIX.
-Do not package.
-Do not install.
+Do not build/package/install the VSIX in this task.
 Do not modify the test environment.
