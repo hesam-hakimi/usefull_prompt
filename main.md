@@ -1,201 +1,170 @@
-Prepare the final Phase 2D pilot field-mapping decision packet.
+Implement ONLY the confirmed Config Explain fixture correction for the final
+remaining Electron failure:
 
-This remains a strictly read-only product-decision task.
+"Config Explain Integration resolves env variables for lineage outputs"
 
-Do not modify files, create branches or worktrees, commit, push, change PR
-metadata, deploy, or begin Phase 2D implementation.
+Task classification: source-only test correction.
+Target type: extension-source.
 
-Ratified product-owner decisions:
+Do not package, install, reload, publish, or run a live smoke test.
 
-1. The Phase 2D pilot is:
-   deposits_vs_withdrawals
+AUTHORITATIVE INVESTIGATION RESULT
 
-2. Pilot business definition:
+ROOT_CAUSE: FIXTURE_DEFECT
 
-   For each applicable transaction date, classify transactions using the
-   existing code-owned deposit-versus-withdrawal logic and produce:
+The failing test fixture currently supplies the environment configuration as a
+single-line inline object similar to:
 
-   - transaction count
-   - total transaction amount
+{ synapse.schema: "acz0001" }
 
-   grouped or distinguished by the existing flow-direction classification.
+The current supported parser path is line-based. It interprets the opening brace
+as part of the key, producing a malformed key such as:
 
-   Phase 2D must preserve the current flow-direction classification exactly.
-   It must not redefine deposit or withdrawal semantics.
+"{ synapse.schema"
 
-3. Required semantic roles:
+Therefore `${synapse.schema}` is not substituted, and the lineage target is
+rendered incorrectly instead of:
 
-   - TRANSACTION_DATE
-   - FLOW_DIRECTION
-   - TRANSACTION_COUNT
-   - TOTAL_TRANSACTION_AMOUNT
+synapse:acz0001.digital_event
 
-4. Dataset-only scope is acceptable for this internal pilot even while its
-   Product Group is product_group:unassigned.
+The repository's canonical environment configs use normal HOCON-style
+key/value entries rather than this single-line inline-object fixture shape.
 
-   This is a temporary migration/pilot condition, not authoritative
-   discovered business metadata.
+SAFETY GATE
 
-5. A structurally valid Draft RegistrySnapshot may be used only for an
-   internal Dev/Test binding pilot.
+Before editing, confirm from repository documentation, canonical env configs,
+neighboring fixtures, and tests that single-line inline HOCON objects are not an
+explicitly supported product contract.
 
-   It must not be presented as published or production-approved metadata.
+- If inline-object syntax is explicitly required or documented as supported,
+  STOP without editing and report PRODUCT_DEFECT.
+- Otherwise proceed with the fixture-only correction below.
 
-6. Matching policy:
+REQUIRED CHANGE
 
-   - exact governed field_id first;
-   - then an explicitly approved alias-to-field_id bridge;
-   - aliases may use only trim, Unicode normalization and case-insensitive
-     comparison;
-   - no fuzzy matching;
-   - no punctuation-stripping or inferred abbreviations;
-   - BUSINESS_NAME may participate only through an explicit approved
-     field-ID bridge;
-   - ties always return ambiguity.
+Modify only:
 
-7. Metadata matching grants no authorization.
+src/test/suite/explain/explain.integration.test.ts
 
-────────────────────────────────────
-1. Inspect the authoritative evidence
-────────────────────────────────────
+At the environment fixture near the failing test, replace the malformed
+single-line inline object with the exact canonical key/value formatting used by
+real repository environment configurations.
 
-Inspect all exact evidence for deposits_vs_withdrawals, including:
+Use the repository-supported equivalent of:
 
-- the existing SemanticQueryPlan materialized plan;
-- plan_for_recipe(...);
-- query_recipies.py;
-- the exact deterministic SQL or renderer used by this recipe;
-- built_in_questions.json Q03;
-- intent_registry.json tracking_flow_of_funds;
-- table.json;
-- field.json;
-- relationship.json;
-- current governed RegistrySnapshot;
-- golden baseline evidence.
+synapse.schema = "acz0001"
 
-Do not infer a physical field mapping from similar names alone.
+Use the exact formatting style evidenced in canonical env configs; do not
+invent a new syntax.
 
-────────────────────────────────────
-2. Produce the exact mapping table
-────────────────────────────────────
+PRESERVE THE TEST CONTRACT
 
-For each required semantic role, return:
+Keep unchanged:
 
-- semantic role;
-- exact physical column name used by the existing recipe;
-- proposed stable field_id;
-- dataset_id;
-- schema_id;
-- product_group_id;
-- authoritative evidence path and line/function;
-- DATA_TYPE;
-- IS_KEY;
-- BUSINESS_NAME;
-- BUSINESS_DESCRIPTION;
-- PII;
-- PCI;
-- SECURITY_CLASSIFICATION_CANDIDATE;
-- whether the mapping is exact, conflicting, missing, or ambiguous.
+- the dbTable expression;
+- the writer format/provider input;
+- the expected lineage value;
+- the assertion requiring:
+  synapse:acz0001.digital_event
 
-Required roles:
+Do not weaken, remove, broaden, or hard-code around the assertion.
 
-- TRANSACTION_DATE
-- FLOW_DIRECTION
-- TRANSACTION_COUNT
-- TOTAL_TRANSACTION_AMOUNT
+PROTECTED FILES AND COMPONENTS
 
-Also state whether TRANSACTION_COUNT is:
+Do not modify:
 
-- a stored physical field;
-- a derived count operation;
-- or unsupported by the governed metadata contract.
+- HOCONConfigValidator.ts
+- ConfigExplainService.ts
+- IncludeResolver.ts
+- OutputClassifier.ts
+- LineageBuilder.ts
+- package.json
+- any production source file
+- any consumer-workspace file
+- .github/**
+- workflow/**
+- AGENTS.md
+- resources/copilot/**
+- unrelated tests or pre-existing dirty files
 
-Do the same for TOTAL_TRANSACTION_AMOUNT if it is derived rather than a
-stored field.
+EXECUTION PROCEDURE
 
-────────────────────────────────────
-3. Reconcile recipe code with metadata
-────────────────────────────────────
+1. Capture `git status --porcelain` before editing and record the task-start
+   dirty-file baseline.
 
-Determine whether the existing code-owned recipe and the metadata files
-refer to the same:
+2. Make the smallest coherent fixture-only correction.
 
-- dataset;
-- schema;
-- Product Group;
-- physical fields;
-- data types;
-- flow-direction semantics.
+3. Run the exact focused Electron test:
 
-Report every mismatch explicitly.
+   Config Explain Integration resolves env variables for lineage outputs
 
-Do not silently bridge:
+4. Confirm its actual lineage target contains exactly:
 
-- t_* versus v_* namespaces;
-- RRDP versus ACZ/RRDW names;
-- similar business names;
-- differently named physical columns.
+   synapse:acz0001.digital_event
 
-────────────────────────────────────
-4. Recommend the authoritative pilot source
-────────────────────────────────────
+5. Run the neighboring Config Explain test slice.
 
-Choose one recommendation:
+6. Run the relevant HOCON/environment-substitution unit tests, if already
+   available. Do not create unrelated parser capabilities.
 
-A. Existing governed metadata already provides exact authoritative
-   mappings.
+7. Run the normal full Electron/integration command:
 
-B. Exact mappings can be established from existing recipe code and
-   authoritative metadata together, but must be recorded in a new explicit,
-   version-controlled pilot metadata mapping artifact.
+   npm run test
 
-C. No authoritative real mapping can be established; use a clearly labelled
-   synthetic governed fixture only to test the Phase 2D contracts.
+8. Invoke a fresh independent Verifier scoped only to this task's diff.
+   Give the Verifier the task-start dirty-file baseline so pre-existing changes
+   are not attributed to this task.
 
-D. Pilot cannot proceed until additional metadata is onboarded.
+EXPECTED RESULT
 
-Explain the evidence and risks.
+Previous verified baseline:
 
-Do not create the artifact during this task.
+138 total / 135 passed / 1 failed / 2 pending
 
-────────────────────────────────────
-5. Proposed mapping lifecycle
-────────────────────────────────────
+Expected after this correction:
 
-If recommendation B applies, propose the minimum explicit pilot mapping
-artifact and lifecycle.
+138 total / 136 passed / 0 failed / 2 pending
 
-It must:
+The two pending Chat API tests may remain pending. Explain any count difference
+with exact test names.
 
-- contain only the four approved mappings;
-- use stable governed field IDs;
-- record source/provenance;
-- be version controlled;
-- be labelled internal pilot metadata;
-- be incorporated into the canonical RegistrySnapshot;
-- affect registry_version;
-- grant no authorization;
-- be replaceable later by authoritative onboarding;
-- never silently reuse descriptive field.json as executable binding
-  metadata.
+ACCEPTANCE CRITERIA
 
-Follow repository conventions when proposing its path and model.
+- The named Config Explain test passes.
+- The expected lineage target remains:
+  synapse:acz0001.digital_event
+- Only `src/test/suite/explain/explain.integration.test.ts` is changed by this
+  task.
+- No assertion is weakened.
+- No production code is changed.
+- No parser capability is added.
+- No consumer workspace is modified.
+- No package/install/reload/live-smoke action occurs.
+- Fresh independent Verifier returns VERIFIED.
 
-────────────────────────────────────
-6. Final response
-────────────────────────────────────
+RETURN
 
-Return:
+## CONTRACT_SAFETY_CHECK
+State whether inline-object HOCON syntax is documented as supported and cite
+the repository evidence used.
 
-1. Overall readiness:
-   READY
-   READY WITH PRODUCT APPROVAL
-   BLOCKED
+## EXACT_CHANGE
+Show the old fixture shape and new fixture shape.
 
-2. Exact four-role mapping table
-3. Stored versus derived role classification
-4. Recipe-code versus metadata reconciliation
-5. Recommended authoritative-source option: A, B, C or D
-6. Proposed pilot mapping artifact and lifecycle, if needed
-7. Remaining product-owner decisions
-8. Confirmation that nothing was modified
+## FOCUSED_TEST_RESULT
+
+## FULL_TEST_RESULT
+Include total, passed, failed, and pending counts and names of any non-passing
+tests.
+
+## VERIFIER_RESULT
+
+## SCOPE_CONFIRMATION
+List:
+- task-diff file;
+- pre-existing dirty files;
+- production files changed;
+- consumer files changed;
+- package/install status.
+
+## FILES_CHANGED
