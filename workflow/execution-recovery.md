@@ -1,6 +1,6 @@
 # Evidence-Driven Execution and Recovery Contract
 
-This contract makes investigation, remediation, packaging, activation, and live verification repeatable. It supplements `AGENTS.md` and `workflow/README.md`; it does not replace target ownership, approval, or independent-verification rules.
+This contract makes investigation, remediation, packaging, activation, and live verification repeatable. It supplements `AGENTS.md`, `workflow/README.md`, and `workflow/shipped-extension-delivery.md`; it does not replace target ownership, approval, delivery classification, or independent-verification rules.
 
 ## When this contract applies
 
@@ -19,7 +19,7 @@ Do not use ad hoc workarounds to bypass this contract.
 
 ## Optional evidence gate
 
-The normal lifecycle remains:
+The source lifecycle remains:
 
 ```text
 INTAKE
@@ -29,6 +29,18 @@ INTAKE
 → IMPLEMENTING
 → IMPLEMENTED
 → VERIFIED
+```
+
+For `source-only`, `VERIFIED` may then reach `DONE`.
+
+For `shipped-extension`, `VERIFIED` is a pre-install source/package gate and the same task continues through the delivery lifecycle in `workflow/shipped-extension-delivery.md`:
+
+```text
+VERIFIED
+→ BUILT/PACKAGED/PACKAGE_VERIFIED as ordered by the accepted plan
+→ INSTALLED_NOT_ACTIVATED
+→ ACTIVATED_NOT_SMOKE_TESTED
+→ POST_INSTALL_VERIFIED
 → DONE
 ```
 
@@ -71,10 +83,12 @@ Orchestrator implementation
     ↓
 Fresh Verifier
     ↓
-Result or bounded recovery
+source-only result
+or
+shipped-extension delivery continuation → install → reload → smoke → fresh live Verifier when required
 ```
 
-The user should not have to switch agents manually.
+The user should not have to switch agents manually or issue separate routine build/package/install requests for an already-authorized `shipped-extension` task.
 
 ## Evidence-research triggers
 
@@ -100,9 +114,11 @@ Before asking the user a question, classify it as exactly one of:
 | `DERIVABLE_FROM_REPO` | Current repository artifacts contain the answer | Inspect the owning workspace and canonical files; do not ask the user |
 | `AUTHORITATIVE_LITERAL` | A schema, contract, accepted example, or registration record must supply an exact value | Search authoritative sources; ask only if still unresolved |
 | `BUSINESS_DECISION` | Multiple valid behaviors remain and the user or owner must choose | Ask one focused question with consequences |
-| `USER_APPROVAL` | Exact preview, manifest, write, package, install, deploy, or run needs consent | Bind approval to the exact operation |
+| `USER_APPROVAL` | Exact preview, manifest, consumer write, publish, deploy, production action, or otherwise separately gated operation needs consent | Bind approval to the exact operation |
 | `TOOLING_GAP` | The answer exists but tooling cannot retrieve, parse, preserve, or expose it | Report a product defect; do not ask the user to paste or reconstruct the data |
 | `SECURITY_BLOCKER` | Safe target, containment, authority, or data handling cannot be established | Stop and report the blocker |
+
+For an active `shipped-extension` implementation/fix, routine local build/package/package-verification/one-install/read-only-smoke stages for the exact unchanged task artifact are already authorized by the original request. Do not misclassify each internal stage as a new `USER_APPROVAL` question. Mutating consumer smoke, publish, deployment, production actions, destructive external changes, and unrelated writes remain separately approval-gated.
 
 Every proposed question must include:
 
@@ -137,42 +153,56 @@ Record the classification in the execution checkpoint and evidence packet.
 When an unexpected failure occurs:
 
 1. Stop the current mutation or operational sequence.
-2. Preserve the exact error, tool call, task state, artifact state, and changed-file list.
+2. Preserve the exact error, tool call, task state, artifact state, package/runtime identity, and changed-file list.
 3. Emit an `## Execution Checkpoint`.
 4. Classify the failure and all pending questions.
 5. Invoke Evidence Researcher when any trigger applies.
 6. Determine whether remediation stays in the current task or requires a new task.
 7. Update the change contract and acceptance criteria using grounded evidence.
-8. Invoke Planner for the bounded remediation.
+8. Invoke Planner for the bounded remediation when source/package behavior must change.
 9. Implement only the accepted remediation.
 10. Re-run the failed stage and adjacent critical checks.
 11. Invoke a fresh Verifier.
-12. Resume the original lifecycle only when the recovered evidence is compatible with the original request.
+12. Resume the original lifecycle only when the recovered evidence is compatible with the original request and package identity rules.
 
 Do not repeatedly retry the same failed action without new evidence.
 
 ## Same-task remediation versus new task
 
-A remediation may remain in the current task only when all are true:
+A remediation may remain in the current task before `PACKAGE_VERIFIED` only when all are true:
 
 - it is inside the accepted target and change contract;
-- it does not add a new operational action or approval;
-- it does not change the produced package identity or version after package verification;
-- it does not expand public behavior, dependencies, schemas, security, or deployment scope;
-- it occurs before `VERIFIED` or `DONE`;
-- the original acceptance criteria still describe the exact result.
+- it does not add a separately gated operational action or approval;
+- it does not expand public behavior, dependencies, schemas, security, or deployment scope beyond the accepted plan;
+- the original acceptance criteria still describe the exact result;
+- the remediation-cycle limit in the Orchestrator contract is not exceeded.
+
+The routine delivery stages of an already-authorized `shipped-extension` task are **same-task continuation**, not remediation and not new requests:
+
+- version preparation when needed before package verification;
+- canonical build;
+- package creation;
+- package-content verification;
+- pre-install independent verification;
+- one local install of the exact verified package;
+- host reload/restart by the user/environment;
+- active-version confirmation;
+- read-only changed-path live smoke;
+- fresh live verification when required.
 
 Start a new task at `INTAKE` when any of these is true:
 
-- a verified, packaged, installed, or live-tested artifact needs source changes;
-- a dependency, package version, agent role, tool contract, or deployment behavior must change;
-- a live smoke test reveals a new product defect;
-- a new build, package, install, publish, deploy, repair, upgrade, or run is requested;
-- the target, workspace, artifact set, destination, or approval changes;
+- a verified/package-verified, installed, activated, or live-tested artifact needs source or package-content changes;
+- a dependency, package version/identity after verification, agent role, tool contract, public behavior, or deployment behavior must change outside the accepted plan;
+- a live smoke test reveals a new product defect requiring source/package changes;
+- a later standalone build, package, install, publish, deploy, repair, upgrade, or run is requested after the earlier task ended or was not already authorized by that task;
+- the target, workspace, artifact set, destination, or separately required approval changes;
 - the remediation exceeds the accepted plan;
-- the conversation or host was restored and trusted task state cannot be proven.
+- the conversation or host was restored and trusted checkpoint/package identity cannot be proven.
 
-The earlier task must report its actual terminal state and evidence. Do not retroactively rewrite it as successful.
+Do **not** start a new task merely because the same unchanged shipped-extension package moved from package verification to install, from install to host reload, or from activation to the included read-only smoke.
+
+The earlier task must report its actual lifecycle state and evidence. Do not retroactively rewrite it as successful.
 
 ## Execution checkpoint
 
@@ -185,6 +215,7 @@ Emit a checkpoint:
 - after package verification;
 - after installation;
 - before a required user action such as host reload;
+- after activation confirmation;
 - after live smoke;
 - whenever the task becomes blocked;
 - before handing work to another session.
@@ -196,11 +227,15 @@ Use this format:
 
 Task ID:
 Request class:
+Delivery classification:
 Current workflow state:
 Target type:
 Workspace root:
 Canonical source:
-Package/install/active version:
+Source version/commit:
+Package path/version:
+Installed version:
+Active version:
 Evidence gathered:
 Changed files or operation manifest:
 Checks completed:
@@ -211,6 +246,8 @@ New task required: yes | no
 ```
 
 A checkpoint is evidence, not approval.
+
+For a same-task shipped-extension continuation after host reload, require the checkpoint to prove the exact installed package/version is unchanged before reusing prior package verification.
 
 ## Source-to-runtime evidence chain
 
@@ -249,7 +286,8 @@ Examples:
 - unresolved onboarding literals block onboarding, not local job/config preview;
 - a truncated STTM rule blocks artifacts depending on that rule, not unrelated sheet inventory;
 - unavailable deployment credentials block deploy, not package inspection;
-- a package/runtime mismatch blocks post-install completion, not the already verified source diff.
+- a package/runtime mismatch blocks post-install completion, not the already verified source diff;
+- a required host reload pauses at `INSTALLED_NOT_ACTIVATED` without invalidating the exact verified installed package.
 
 The final manifest and report must identify each unaffected, conflicting, and blocked item separately.
 
@@ -262,6 +300,7 @@ The packet must separate:
 - verified facts;
 - source trace;
 - runtime trace;
+- package/install/active identity;
 - question classifications;
 - hypotheses;
 - disproved hypotheses;
@@ -280,7 +319,7 @@ Stop rather than work around the issue when:
 - a required tool or dependency is unavailable;
 - complete source data exists but only a lossy fallback is available;
 - a business conflict materially changes output;
-- the recovery requires unapproved mutation or operation;
+- the recovery requires an unapproved separately gated mutation or operation;
 - package, installed, and active identities cannot be distinguished;
 - independent verification cannot be performed;
 - the next action would overwrite unmanaged or protected files.
