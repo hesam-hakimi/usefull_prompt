@@ -121,8 +121,30 @@ test_isolation:
     - no-generated-output-outside-fixture
     - temporary-fixtures-cleaned
 
+delivery_classification:
+  source-only:
+    local_package_install_required: false
+
+  shipped-extension:
+    implementation_request_authorizes_local_delivery_chain: true
+    local_delivery_stages:
+      - version-preparation-when-needed
+      - build
+      - package
+      - package-verification
+      - local-install
+      - activation-confirmation
+      - changed-path-live-smoke
+    automatic_version_policy: next-patch-on-collision-only
+    publish_authorized: false
+    deploy_authorized: false
+    unrelated_consumer_write_authorized: false
+
+  operational-only:
+    standalone_request_required: true
+
 operational_tasks:
-  start_new_task_at_intake:
+  standalone_request_starts_new_task_at_intake:
     - edit
     - build
     - package
@@ -132,6 +154,13 @@ operational_tasks:
     - repair
     - upgrade
 
+  same_task_shipped_extension_delivery:
+    enabled: true
+    new_task_between_internal_stages: false
+    package_or_source_change_after_package_verification: new-task
+    live_smoke_product_defect: new-task
+
 installation_states:
   package_installed: INSTALLED_NOT_ACTIVATED
+  host_reloaded: ACTIVATED_NOT_SMOKE_TESTED
   host_reloaded_and_live_smoke_passed: POST_INSTALL_VERIFIED
